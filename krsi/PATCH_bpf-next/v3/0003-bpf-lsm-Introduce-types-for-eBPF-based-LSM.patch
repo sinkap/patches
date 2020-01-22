@@ -1,0 +1,169 @@
+From 1d7ea6c03199809e3b868e8b353fb6f86c38cf2f Mon Sep 17 00:00:00 2001
+From: KP Singh <kpsingh@google.com>
+Date: Tue, 7 Jan 2020 23:45:14 +0100
+Subject: [PATCH bpf-next v3 03/10] bpf: lsm: Introduce types for eBPF based
+ LSM
+
+A new eBPF program type BPF_PROG_TYPE_LSM with an
+expected attach type of BPF_LSM_MAC. Attachment to LSM hooks is not
+implemented in this patch.
+
+On defining the types for the program, the macros expect that
+<prog_name>_prog_ops and <prog_name>_verifier_ops exist. This is
+implicitly required by the macro:
+
+  BPF_PROG_TYPE(BPF_PROG_TYPE_LSM, lsm, ...)
+
+Signed-off-by: KP Singh <kpsingh@google.com>
+Reviewed-by: Brendan Jackman <jackmanb@google.com>
+Reviewed-by: Florent Revest <revest@google.com>
+Reviewed-by: Thomas Garnier <thgarnie@google.com>
+---
+ include/linux/bpf_types.h      |  4 ++++
+ include/uapi/linux/bpf.h       |  2 ++
+ kernel/bpf/syscall.c           |  6 ++++++
+ security/bpf/Makefile          |  2 +-
+ security/bpf/ops.c             | 28 ++++++++++++++++++++++++++++
+ tools/include/uapi/linux/bpf.h |  2 ++
+ tools/lib/bpf/libbpf_probes.c  |  1 +
+ 7 files changed, 44 insertions(+), 1 deletion(-)
+ create mode 100644 security/bpf/ops.c
+
+diff --git a/include/linux/bpf_types.h b/include/linux/bpf_types.h
+index 9f326e6ef885..2f5b054500d7 100644
+--- a/include/linux/bpf_types.h
++++ b/include/linux/bpf_types.h
+@@ -68,6 +68,10 @@ BPF_PROG_TYPE(BPF_PROG_TYPE_SK_REUSEPORT, sk_reuseport,
+ #if defined(CONFIG_BPF_JIT)
+ BPF_PROG_TYPE(BPF_PROG_TYPE_STRUCT_OPS, bpf_struct_ops,
+ 	      void *, void *)
++#ifdef CONFIG_SECURITY_BPF
++BPF_PROG_TYPE(BPF_PROG_TYPE_LSM, lsm,
++	       void *, void *)
++#endif /* CONFIG_SECURITY_BPF */
+ #endif
+ 
+ BPF_MAP_TYPE(BPF_MAP_TYPE_ARRAY, array_map_ops)
+diff --git a/include/uapi/linux/bpf.h b/include/uapi/linux/bpf.h
+index 033d90a2282d..2406e7752245 100644
+--- a/include/uapi/linux/bpf.h
++++ b/include/uapi/linux/bpf.h
+@@ -180,6 +180,7 @@ enum bpf_prog_type {
+ 	BPF_PROG_TYPE_CGROUP_SOCKOPT,
+ 	BPF_PROG_TYPE_TRACING,
+ 	BPF_PROG_TYPE_STRUCT_OPS,
++	BPF_PROG_TYPE_LSM,
+ };
+ 
+ enum bpf_attach_type {
+@@ -209,6 +210,7 @@ enum bpf_attach_type {
+ 	BPF_TRACE_RAW_TP,
+ 	BPF_TRACE_FENTRY,
+ 	BPF_TRACE_FEXIT,
++	BPF_LSM_MAC,
+ 	__MAX_BPF_ATTACH_TYPE
+ };
+ 
+diff --git a/kernel/bpf/syscall.c b/kernel/bpf/syscall.c
+index c26a71460f02..137133ece2df 100644
+--- a/kernel/bpf/syscall.c
++++ b/kernel/bpf/syscall.c
+@@ -2379,6 +2379,9 @@ static int bpf_prog_attach(const union bpf_attr *attr)
+ 	case BPF_LIRC_MODE2:
+ 		ptype = BPF_PROG_TYPE_LIRC_MODE2;
+ 		break;
++	case BPF_LSM_MAC:
++		ptype = BPF_PROG_TYPE_LSM;
++		break;
+ 	case BPF_FLOW_DISSECTOR:
+ 		ptype = BPF_PROG_TYPE_FLOW_DISSECTOR;
+ 		break;
+@@ -2410,6 +2413,9 @@ static int bpf_prog_attach(const union bpf_attr *attr)
+ 	case BPF_PROG_TYPE_LIRC_MODE2:
+ 		ret = lirc_prog_attach(attr, prog);
+ 		break;
++	case BPF_PROG_TYPE_LSM:
++		ret = -EINVAL;
++		break;
+ 	case BPF_PROG_TYPE_FLOW_DISSECTOR:
+ 		ret = skb_flow_dissector_bpf_prog_attach(attr, prog);
+ 		break;
+diff --git a/security/bpf/Makefile b/security/bpf/Makefile
+index 26a0ab6f99b7..c78a8a056e7e 100644
+--- a/security/bpf/Makefile
++++ b/security/bpf/Makefile
+@@ -2,4 +2,4 @@
+ #
+ # Copyright 2019 Google LLC.
+ 
+-obj-$(CONFIG_SECURITY_BPF) := lsm.o
++obj-$(CONFIG_SECURITY_BPF) := lsm.o ops.o
+diff --git a/security/bpf/ops.c b/security/bpf/ops.c
+new file mode 100644
+index 000000000000..81c2bd9c0495
+--- /dev/null
++++ b/security/bpf/ops.c
+@@ -0,0 +1,28 @@
++// SPDX-License-Identifier: GPL-2.0
++
++/*
++ * Copyright 2019 Google LLC.
++ */
++
++#include <linux/filter.h>
++#include <linux/bpf.h>
++
++const struct bpf_prog_ops lsm_prog_ops = {
++};
++
++static const struct bpf_func_proto *get_bpf_func_proto(
++	enum bpf_func_id func_id, const struct bpf_prog *prog)
++{
++	switch (func_id) {
++	case BPF_FUNC_map_lookup_elem:
++		return &bpf_map_lookup_elem_proto;
++	case BPF_FUNC_get_current_pid_tgid:
++		return &bpf_get_current_pid_tgid_proto;
++	default:
++		return NULL;
++	}
++}
++
++const struct bpf_verifier_ops lsm_verifier_ops = {
++	.get_func_proto = get_bpf_func_proto,
++};
+diff --git a/tools/include/uapi/linux/bpf.h b/tools/include/uapi/linux/bpf.h
+index 033d90a2282d..2406e7752245 100644
+--- a/tools/include/uapi/linux/bpf.h
++++ b/tools/include/uapi/linux/bpf.h
+@@ -180,6 +180,7 @@ enum bpf_prog_type {
+ 	BPF_PROG_TYPE_CGROUP_SOCKOPT,
+ 	BPF_PROG_TYPE_TRACING,
+ 	BPF_PROG_TYPE_STRUCT_OPS,
++	BPF_PROG_TYPE_LSM,
+ };
+ 
+ enum bpf_attach_type {
+@@ -209,6 +210,7 @@ enum bpf_attach_type {
+ 	BPF_TRACE_RAW_TP,
+ 	BPF_TRACE_FENTRY,
+ 	BPF_TRACE_FEXIT,
++	BPF_LSM_MAC,
+ 	__MAX_BPF_ATTACH_TYPE
+ };
+ 
+diff --git a/tools/lib/bpf/libbpf_probes.c b/tools/lib/bpf/libbpf_probes.c
+index 8cc992bc532a..2314889369cc 100644
+--- a/tools/lib/bpf/libbpf_probes.c
++++ b/tools/lib/bpf/libbpf_probes.c
+@@ -107,6 +107,7 @@ probe_load(enum bpf_prog_type prog_type, const struct bpf_insn *insns,
+ 	case BPF_PROG_TYPE_CGROUP_SOCKOPT:
+ 	case BPF_PROG_TYPE_TRACING:
+ 	case BPF_PROG_TYPE_STRUCT_OPS:
++	case BPF_PROG_TYPE_LSM:
+ 	default:
+ 		break;
+ 	}
+-- 
+2.20.1
+

@@ -1,0 +1,22 @@
+#!/bin/bash
+
+cat << EOF
+"David S. Miller" <davem@davemloft.net>
+Alexey Kuznetsov <kuznet@ms2.inr.ac.ru>
+Hideaki YOSHIFUJI <yoshfuji@linux-ipv6.org>
+Alexei Starovoitov <ast@kernel.org>
+Daniel Borkmann <daniel@iogearbox.net>
+Martin KaFai Lau <kafai@fb.com>
+Song Liu <songliubraving@fb.com>
+Yonghong Song <yhs@fb.com>
+Andrii Nakryiko <andriin@fb.com>
+Kees Cook <keescook@chromium.org>
+Thomas Garnier <thgarnie@chromium.org>
+Florent Revest <revest@chromium.org>
+Brendan Jackman <jackmanb@chromium.org>
+Jann Horn <jannh@google.com>
+Matthew Garrett <mjg59@google.com>
+Michael Halcrow <mhalcrow@google.com>
+EOF
+
+

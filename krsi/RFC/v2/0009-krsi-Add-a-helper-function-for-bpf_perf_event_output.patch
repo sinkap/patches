@@ -1,0 +1,88 @@
+From b8c4ca37bd2db6de4ce48c74a63173c96918f3a3 Mon Sep 17 00:00:00 2001
+From: KP Singh <kpsingh@google.com>
+Date: Tue, 14 May 2019 12:11:50 +0200
+Subject: [RFC v2 09/14] krsi: Add a helper function for bpf_perf_event_output
+
+This helper is mapped to the existing operation
+BPF_FUNC_perf_event_output.
+
+An example usage of this function would be:
+
+#define BUF_SIZE 64;
+
+struct bpf_map_def SEC("maps") perf_map = {
+        .type = BPF_MAP_TYPE_PERF_EVENT_ARRAY,
+        .key_size = sizeof(int),
+        .value_size = sizeof(u32),
+        .max_entries = MAX_CPUS,
+};
+
+SEC("krsi")
+int bpf_prog1(void *ctx)
+{
+	char buf[BUF_SIZE];
+	int len;
+	u64 flags = BPF_F_CURRENT_CPU;
+
+	/* some logic that fills up buf with len data*/
+	len = fill_up_buf(buf);
+	if (len < 0)
+		return len;
+	if (len > BU)
+		return 0;
+
+	bpf_perf_event_output(ctx, &perf_map, flags, buf len);
+	return 0;
+}
+
+A sample program that showcases the use of bpf_perf_event_output is
+added later.
+
+Signed-off-by: KP Singh <kpsingh@google.com>
+---
+ security/krsi/ops.c | 22 ++++++++++++++++++++++
+ 1 file changed, 22 insertions(+)
+
+diff --git a/security/krsi/ops.c b/security/krsi/ops.c
+index a61508b7018f..57bd304a03f4 100644
+--- a/security/krsi/ops.c
++++ b/security/krsi/ops.c
+@@ -111,6 +111,26 @@ static bool krsi_prog_is_valid_access(int off, int size,
+ 	return false;
+ }
+ 
++BPF_CALL_5(krsi_event_output, void *, log,
++	   struct bpf_map *, map, u64, flags, void *, data, u64, size)
++{
++	if (unlikely(flags & ~(BPF_F_INDEX_MASK)))
++		return -EINVAL;
++
++	return bpf_event_output(map, flags, data, size, NULL, 0, NULL);
++}
++
++static const struct bpf_func_proto krsi_event_output_proto =  {
++	.func		= krsi_event_output,
++	.gpl_only       = true,
++	.ret_type       = RET_INTEGER,
++	.arg1_type      = ARG_PTR_TO_CTX,
++	.arg2_type      = ARG_CONST_MAP_PTR,
++	.arg3_type      = ARG_ANYTHING,
++	.arg4_type      = ARG_PTR_TO_MEM,
++	.arg5_type      = ARG_CONST_SIZE_OR_ZERO,
++};
++
+ static const struct bpf_func_proto *krsi_prog_func_proto(enum bpf_func_id
+ 							 func_id,
+ 							 const struct bpf_prog
+@@ -121,6 +141,8 @@ static const struct bpf_func_proto *krsi_prog_func_proto(enum bpf_func_id
+ 		return &bpf_map_lookup_elem_proto;
+ 	case BPF_FUNC_get_current_pid_tgid:
+ 		return &bpf_get_current_pid_tgid_proto;
++	case BPF_FUNC_perf_event_output:
++		return &krsi_event_output_proto;
+ 	default:
+ 		return NULL;
+ 	}
+-- 
+2.20.1
+

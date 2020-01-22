@@ -1,0 +1,103 @@
+From dedfaf024ccd21fccc5ce034ded8628bf12575a8 Mon Sep 17 00:00:00 2001
+From: KP Singh <kpsingh@google.com>
+Date: Sat, 7 Sep 2019 23:23:45 +0200
+Subject: [RFC v1 02/14] krsi: Introduce types for KRSI eBPF
+
+KRSI intrdocues a new eBPF program type BPF_PROG_TYPE_KRSI with an
+expected attach type of BPF_KRSI. An -EINVAL error is returned if an
+attachment is requested.
+
+Signed-off-by: KP Singh <kpsingh@google.com>
+---
+ include/linux/bpf_types.h |  3 +++
+ include/uapi/linux/bpf.h  |  2 ++
+ kernel/bpf/syscall.c      |  6 ++++++
+ security/krsi/Makefile    |  2 +-
+ security/krsi/ops.c       | 10 ++++++++++
+ 5 files changed, 22 insertions(+), 1 deletion(-)
+ create mode 100644 security/krsi/ops.c
+
+diff --git a/include/linux/bpf_types.h b/include/linux/bpf_types.h
+index eec5aeeeaf92..129594c09b5c 100644
+--- a/include/linux/bpf_types.h
++++ b/include/linux/bpf_types.h
+@@ -38,6 +38,9 @@ BPF_PROG_TYPE(BPF_PROG_TYPE_LIRC_MODE2, lirc_mode2)
+ #ifdef CONFIG_INET
+ BPF_PROG_TYPE(BPF_PROG_TYPE_SK_REUSEPORT, sk_reuseport)
+ #endif
++#ifdef CONFIG_SECURITY_KRSI
++BPF_PROG_TYPE(BPF_PROG_TYPE_KRSI, krsi)
++#endif
+ 
+ BPF_MAP_TYPE(BPF_MAP_TYPE_ARRAY, array_map_ops)
+ BPF_MAP_TYPE(BPF_MAP_TYPE_PERCPU_ARRAY, percpu_array_map_ops)
+diff --git a/include/uapi/linux/bpf.h b/include/uapi/linux/bpf.h
+index a5aa7d3ac6a1..32ab38f1a2fe 100644
+--- a/include/uapi/linux/bpf.h
++++ b/include/uapi/linux/bpf.h
+@@ -171,6 +171,7 @@ enum bpf_prog_type {
+ 	BPF_PROG_TYPE_CGROUP_SYSCTL,
+ 	BPF_PROG_TYPE_RAW_TRACEPOINT_WRITABLE,
+ 	BPF_PROG_TYPE_CGROUP_SOCKOPT,
++	BPF_PROG_TYPE_KRSI,
+ };
+ 
+ enum bpf_attach_type {
+@@ -197,6 +198,7 @@ enum bpf_attach_type {
+ 	BPF_CGROUP_UDP6_RECVMSG,
+ 	BPF_CGROUP_GETSOCKOPT,
+ 	BPF_CGROUP_SETSOCKOPT,
++	BPF_KRSI,
+ 	__MAX_BPF_ATTACH_TYPE
+ };
+ 
+diff --git a/kernel/bpf/syscall.c b/kernel/bpf/syscall.c
+index 5d141f16f6fa..f38a539f7e67 100644
+--- a/kernel/bpf/syscall.c
++++ b/kernel/bpf/syscall.c
+@@ -1915,6 +1915,9 @@ static int bpf_prog_attach(const union bpf_attr *attr)
+ 	case BPF_LIRC_MODE2:
+ 		ptype = BPF_PROG_TYPE_LIRC_MODE2;
+ 		break;
++	case BPF_KRSI:
++		ptype = BPF_PROG_TYPE_KRSI;
++		break;
+ 	case BPF_FLOW_DISSECTOR:
+ 		ptype = BPF_PROG_TYPE_FLOW_DISSECTOR;
+ 		break;
+@@ -1946,6 +1949,9 @@ static int bpf_prog_attach(const union bpf_attr *attr)
+ 	case BPF_PROG_TYPE_LIRC_MODE2:
+ 		ret = lirc_prog_attach(attr, prog);
+ 		break;
++	case BPF_PROG_TYPE_KRSI:
++		ret = -EINVAL;
++		break;
+ 	case BPF_PROG_TYPE_FLOW_DISSECTOR:
+ 		ret = skb_flow_dissector_bpf_prog_attach(attr, prog);
+ 		break;
+diff --git a/security/krsi/Makefile b/security/krsi/Makefile
+index 73320e8d16f8..660cc1f422fd 100644
+--- a/security/krsi/Makefile
++++ b/security/krsi/Makefile
+@@ -1 +1 @@
+-obj-$(CONFIG_SECURITY_KRSI) := krsi.o
++obj-$(CONFIG_SECURITY_KRSI) := krsi.o ops.o
+diff --git a/security/krsi/ops.c b/security/krsi/ops.c
+new file mode 100644
+index 000000000000..f2de3bd9621e
+--- /dev/null
++++ b/security/krsi/ops.c
+@@ -0,0 +1,10 @@
++// SPDX-License-Identifier: GPL-2.0
++
++#include <linux/filter.h>
++#include <linux/bpf.h>
++
++const struct bpf_prog_ops krsi_prog_ops = {
++};
++
++const struct bpf_verifier_ops krsi_verifier_ops = {
++};
+-- 
+2.20.1
+

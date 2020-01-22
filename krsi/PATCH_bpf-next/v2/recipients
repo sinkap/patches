@@ -1,0 +1,32 @@
+#!/bin/bash
+
+cat << EOF
+Alexei Starovoitov <ast@kernel.org>
+Daniel Borkmann <daniel@iogearbox.net>
+James Morris <jmorris@namei.org>
+Kees Cook <keescook@chromium.org>
+Thomas Garnier <thgarnie@chromium.org>
+Michael Halcrow <mhalcrow@google.com>
+Paul Turner <pjt@google.com>
+Brendan Gregg <brendan.d.gregg@gmail.com>
+Jann Horn <jannh@google.com>
+Matthew Garrett <mjg59@google.com>
+Christian Brauner <christian@brauner.io>
+"Mickaël Salaün" <mic@digikod.net>
+Florent Revest <revest@chromium.org>
+Brendan Jackman <jackmanb@chromium.org>
+Martin KaFai Lau <kafai@fb.com>
+Song Liu <songliubraving@fb.com>
+Yonghong Song <yhs@fb.com>
+"Serge E. Hallyn" <serge@hallyn.com>
+Mauro Carvalho Chehab <mchehab+samsung@kernel.org>
+"David S. Miller" <davem@davemloft.net>
+Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+Nicolas Ferre <nicolas.ferre@microchip.com>
+Stanislav Fomichev <sdf@google.com>
+Quentin Monnet <quentin.monnet@netronome.com>
+Andrey Ignatov <rdna@fb.com>
+Joe Stringer <joe@wand.net.nz>
+EOF
+
+

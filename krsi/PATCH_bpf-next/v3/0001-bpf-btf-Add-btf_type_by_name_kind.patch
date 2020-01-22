@@ -1,0 +1,67 @@
+From dd84673db0c7318983e86136b6f226d3807fa25b Mon Sep 17 00:00:00 2001
+From: KP Singh <kpsingh@google.com>
+Date: Mon, 30 Dec 2019 12:37:18 +0100
+Subject: [PATCH bpf-next v3 01/10] bpf: btf: Add btf_type_by_name_kind
+
+- The LSM code does the combination of
+  btf_find_by_name_kind and btf_type_by_id a couple of times to figure
+  out the BTF type for security_hook_heads and security_list_options.
+- Add an extern for btf_vmlinux in btf.h
+
+Signed-off-by: KP Singh <kpsingh@google.com>
+Reviewed-by: Brendan Jackman <jackmanb@google.com>
+Reviewed-by: Florent Revest <revest@google.com>
+Reviewed-by: Thomas Garnier <thgarnie@google.com>
+---
+ include/linux/btf.h |  3 +++
+ kernel/bpf/btf.c    | 13 +++++++++++++
+ 2 files changed, 16 insertions(+)
+
+diff --git a/include/linux/btf.h b/include/linux/btf.h
+index 881e9b76ef49..726c5dc0c28b 100644
+--- a/include/linux/btf.h
++++ b/include/linux/btf.h
+@@ -15,6 +15,7 @@ struct btf_type;
+ union bpf_attr;
+ 
+ extern const struct file_operations btf_fops;
++extern struct btf *btf_vmlinux;
+ 
+ void btf_put(struct btf *btf);
+ int btf_new_fd(const union bpf_attr *attr);
+@@ -66,6 +67,8 @@ const struct btf_type *
+ btf_resolve_size(const struct btf *btf, const struct btf_type *type,
+ 		 u32 *type_size, const struct btf_type **elem_type,
+ 		 u32 *total_nelems);
++const struct btf_type *btf_type_by_name_kind(
++	struct btf *btf, const char *name, u8 kind);
+ 
+ #define for_each_member(i, struct_type, member)			\
+ 	for (i = 0, member = btf_type_member(struct_type);	\
+diff --git a/kernel/bpf/btf.c b/kernel/bpf/btf.c
+index 832b5d7fd892..629abcdd7661 100644
+--- a/kernel/bpf/btf.c
++++ b/kernel/bpf/btf.c
+@@ -436,6 +436,19 @@ const struct btf_type *btf_type_resolve_func_ptr(const struct btf *btf,
+ 	return NULL;
+ }
+ 
++const struct btf_type *btf_type_by_name_kind(
++	struct btf *btf, const char *name, u8 kind)
++{
++	const struct btf_type *t;
++	s32 type_id;
++
++	type_id = btf_find_by_name_kind(btf, name, kind);
++	if (type_id < 0)
++		return ERR_PTR(type_id);
++
++	return btf_type_by_id(btf, type_id);
++}
++
+ /* Types that act only as a source, not sink or intermediate
+  * type when resolving.
+  */
+-- 
+2.20.1
+

@@ -1,0 +1,125 @@
+From e8f414b021d408ce32c9c669d5fbad891c996850 Mon Sep 17 00:00:00 2001
+From: KP Singh <kpsingh@google.com>
+Date: Mon, 9 Sep 2019 08:20:39 +0200
+Subject: [RFC v2 11/14] krsi: Pin argument pages in bprm_check_security hook
+
+Pin the memory allocated to the the argv + envv for the new
+process and passes it in the context to the eBPF programs attached to
+the hook.
+
+The get_user_pages_remote cannot be called from an eBPF helper because
+the helpers run in atomic context and the get_user_pages_remote function
+can sleep.
+
+The following heuristics can be added as an optimization:
+
+- Don't pin the pages if no eBPF programs are attached.
+- Don't pin the pages if none of the eBPF programs depend on the
+  information. This would require introspection of the byte-code and
+  checking if certain helpers are called.
+
+Signed-off-by: KP Singh <kpsingh@google.com>
+---
+ security/krsi/include/krsi_init.h |  3 ++
+ security/krsi/krsi.c              | 56 +++++++++++++++++++++++++++++++
+ 2 files changed, 59 insertions(+)
+
+diff --git a/security/krsi/include/krsi_init.h b/security/krsi/include/krsi_init.h
+index 4e17ecacd4ed..6152847c3b08 100644
+--- a/security/krsi/include/krsi_init.h
++++ b/security/krsi/include/krsi_init.h
+@@ -16,6 +16,9 @@ extern int krsi_fs_initialized;
+ 
+ struct krsi_bprm_ctx {
+ 	struct linux_binprm *bprm;
++	char *arg_pages;
++	unsigned long num_arg_pages;
++	unsigned long max_arg_offset;
+ };
+ 
+ /*
+diff --git a/security/krsi/krsi.c b/security/krsi/krsi.c
+index d3a4a361c192..00a7150c1b22 100644
+--- a/security/krsi/krsi.c
++++ b/security/krsi/krsi.c
+@@ -4,6 +4,8 @@
+ #include <linux/filter.h>
+ #include <linux/bpf.h>
+ #include <linux/binfmts.h>
++#include <linux/highmem.h>
++#include <linux/mm.h>
+ 
+ #include "krsi_init.h"
+ 
+@@ -17,6 +19,53 @@ struct krsi_hook krsi_hooks_list[] = {
+ 	#undef KRSI_HOOK_INIT
+ };
+ 
++static int pin_arg_pages(struct krsi_bprm_ctx *ctx)
++{
++	int ret = 0;
++	char *kaddr;
++	struct page *page;
++	unsigned long i, pos, num_arg_pages;
++	struct linux_binprm *bprm = ctx->bprm;
++	char *buf;
++
++	/*
++	 * The bprm->vma_pages does not have the correct count
++	 * for execution that is done by a kernel thread using the UMH.
++	 * vm_pages is updated in acct_arg_size and bails
++	 * out if current->mm is NULL (which is the case for a kernel thread).
++	 * It's safer to use vma_pages(struct linux_binprm*) to get the
++	 * actual number
++	 */
++	num_arg_pages = vma_pages(bprm->vma);
++	if (!num_arg_pages)
++		return -ENOMEM;
++
++	buf = kmalloc_array(num_arg_pages, PAGE_SIZE, GFP_KERNEL);
++	if (!buf)
++		return -ENOMEM;
++
++	for (i = 0; i < num_arg_pages; i++) {
++		pos = ALIGN_DOWN(bprm->p, PAGE_SIZE) + i * PAGE_SIZE;
++		ret = get_user_pages_remote(current, bprm->mm, pos, 1,
++					    FOLL_FORCE, &page, NULL, NULL);
++		if (ret <= 0) {
++			kfree(buf);
++			return -ENOMEM;
++		}
++
++		kaddr = kmap(page);
++		memcpy(buf + i * PAGE_SIZE, kaddr, PAGE_SIZE);
++		kunmap(page);
++		put_page(page);
++	}
++
++	ctx->arg_pages = buf;
++	ctx->num_arg_pages = num_arg_pages;
++	ctx->max_arg_offset = num_arg_pages * PAGE_SIZE;
++
++	return 0;
++}
++
+ static int krsi_process_execution(struct linux_binprm *bprm)
+ {
+ 	int ret;
+@@ -26,7 +75,14 @@ static int krsi_process_execution(struct linux_binprm *bprm)
+ 		.bprm = bprm,
+ 	};
+ 
++	ret = pin_arg_pages(&ctx.bprm_ctx);
++	if (ret < 0)
++		goto out_arg_pages;
++
+ 	ret = krsi_run_progs(PROCESS_EXECUTION, &ctx);
++	kfree(ctx.bprm_ctx.arg_pages);
++
++out_arg_pages:
+ 	return ret;
+ }
+ 
+-- 
+2.20.1
+

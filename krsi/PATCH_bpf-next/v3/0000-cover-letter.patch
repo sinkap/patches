@@ -1,0 +1,66 @@
+From 62e705ed3ac4e7d0801ec53f09741a0f68c0ae1e Mon Sep 17 00:00:00 2001
+From: KP Singh <kpsingh@google.com>
+Date: Wed, 22 Jan 2020 10:18:13 -0800
+Subject: [PATCH bpf-next v3 00/10] *** SUBJECT HERE ***
+
+*** BLURB HERE ***
+
+KP Singh (10):
+  bpf: btf: Add btf_type_by_name_kind
+  bpf: lsm: Add a skeleton and config options
+  bpf: lsm: Introduce types for eBPF based LSM
+  bpf: lsm: Add mutable hooks list for the BPF LSM
+  bpf: lsm: BTF API for LSM hooks
+  bpf: lsm: Implement attach, detach and execution
+  bpf: lsm: Make the allocated callback RO+X
+  tools/libbpf: Add support for BPF_PROG_TYPE_LSM
+  bpf: lsm: Add selftests for BPF_PROG_TYPE_LSM
+  bpf: lsm: Add Documentation
+
+ Documentation/security/bpf.rst                | 165 +++++++++
+ Documentation/security/index.rst              |   1 +
+ MAINTAINERS                                   |  11 +
+ include/linux/bpf.h                           |   4 +
+ include/linux/bpf_lsm.h                       |  99 ++++++
+ include/linux/bpf_types.h                     |   4 +
+ include/linux/btf.h                           |   3 +
+ include/linux/lsm_hooks.h                     |   1 +
+ include/uapi/linux/bpf.h                      |   6 +
+ kernel/bpf/btf.c                              |  13 +
+ kernel/bpf/syscall.c                          |  51 ++-
+ kernel/bpf/verifier.c                         |  74 +++-
+ security/Kconfig                              |  11 +-
+ security/Makefile                             |   2 +
+ security/bpf/Kconfig                          |  25 ++
+ security/bpf/Makefile                         |   7 +
+ security/bpf/hooks.c                          | 315 ++++++++++++++++++
+ security/bpf/include/bpf_lsm.h                |  70 ++++
+ security/bpf/lsm.c                            |  87 +++++
+ security/bpf/ops.c                            |  30 ++
+ security/security.c                           |  30 +-
+ tools/include/uapi/linux/bpf.h                |   6 +
+ tools/lib/bpf/bpf.c                           |   6 +-
+ tools/lib/bpf/bpf.h                           |   1 +
+ tools/lib/bpf/libbpf.c                        | 104 +++++-
+ tools/lib/bpf/libbpf.h                        |   4 +
+ tools/lib/bpf/libbpf.map                      |   3 +
+ tools/lib/bpf/libbpf_probes.c                 |   1 +
+ tools/testing/selftests/bpf/lsm_helpers.h     |  19 ++
+ .../bpf/prog_tests/lsm_mprotect_audit.c       |  58 ++++
+ .../selftests/bpf/progs/lsm_mprotect_audit.c  |  48 +++
+ 31 files changed, 1229 insertions(+), 30 deletions(-)
+ create mode 100644 Documentation/security/bpf.rst
+ create mode 100644 include/linux/bpf_lsm.h
+ create mode 100644 security/bpf/Kconfig
+ create mode 100644 security/bpf/Makefile
+ create mode 100644 security/bpf/hooks.c
+ create mode 100644 security/bpf/include/bpf_lsm.h
+ create mode 100644 security/bpf/lsm.c
+ create mode 100644 security/bpf/ops.c
+ create mode 100644 tools/testing/selftests/bpf/lsm_helpers.h
+ create mode 100644 tools/testing/selftests/bpf/prog_tests/lsm_mprotect_audit.c
+ create mode 100644 tools/testing/selftests/bpf/progs/lsm_mprotect_audit.c
+
+-- 
+2.20.1
+

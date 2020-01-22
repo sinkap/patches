@@ -1,0 +1,116 @@
+From b132df661a348af06af6ada38b6f58ab6ed6bdee Mon Sep 17 00:00:00 2001
+From: KP Singh <kpsingh@google.com>
+Date: Mon, 9 Sep 2019 08:16:32 +0200
+Subject: [RFC v2 10/14] krsi: Handle attachment of the same program
+
+Allow the userspace to attach a newer version of a program without
+having duplicates of the same program.
+
+If BPF_F_ALLOW_OVERRIDE is passed, the attachment logic compares the
+name of the new program to the names of existing attached programs. The
+names are only compared till a "__" (or '\0', if there is no "__"). If
+a successful match is found, the existing program is replaced with the
+newer attachment.
+
+./krsi Attaches "env_dumper__v1" followed by "env_dumper__v2"
+to the process_execution hook of the KRSI LSM.
+
+./krsi
+./krsi
+
+Before:
+
+  cat /sys/kernel/security/krsi/process_execution
+  env_dumper__v1
+  env_dumper__v2
+
+After:
+
+  cat /sys/kernel/security/krsi/process_execution
+  env_dumper__v2
+
+Signed-off-by: KP Singh <kpsingh@google.com>
+---
+ security/krsi/ops.c | 53 ++++++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 52 insertions(+), 1 deletion(-)
+
+diff --git a/security/krsi/ops.c b/security/krsi/ops.c
+index 57bd304a03f4..1f4df920139c 100644
+--- a/security/krsi/ops.c
++++ b/security/krsi/ops.c
+@@ -65,11 +65,52 @@ static struct krsi_hook *get_hook_from_fd(int fd)
+ 	return ERR_PTR(ret);
+ }
+ 
++/*
++ * match_prog_name matches the name of the program till "__"
++ * or the end of the string is encountered. This allows
++ * a different version of the same program to be loaded.
++ *
++ * For example:
++ *
++ *	env_dumper__v1 is matched with env_dumper__v2
++ *
++ */
++static bool match_prog_name(char *a, char *b)
++{
++	int m, n;
++	char *end;
++
++	end = strstr(a, "__");
++	n = end ? end - a : strlen(a);
++
++	end = strstr(b, "__");
++	m = end ? end - b : strlen(b);
++
++	if (m != n)
++		return false;
++
++	return strncmp(a, b, n) == 0;
++}
++
++static struct bpf_prog *find_attached_prog(struct bpf_prog_array *array,
++					   struct bpf_prog *prog)
++{
++	struct bpf_prog_array_item *item = array->items;
++
++	for (; item->prog; item++) {
++		if (match_prog_name(item->prog->aux->name, prog->aux->name))
++			return item->prog;
++	}
++
++	return NULL;
++}
++
+ int krsi_prog_attach(const union bpf_attr *attr, struct bpf_prog *prog)
+ {
+ 	struct bpf_prog_array *old_array;
+ 	struct bpf_prog_array *new_array;
+ 	struct krsi_hook *h;
++	struct bpf_prog *old_prog;
+ 	int ret = 0;
+ 
+ 	h = get_hook_from_fd(attr->target_fd);
+@@ -79,8 +120,18 @@ int krsi_prog_attach(const union bpf_attr *attr, struct bpf_prog *prog)
+ 	mutex_lock(&h->mutex);
+ 	old_array = rcu_dereference_protected(h->progs,
+ 					      lockdep_is_held(&h->mutex));
++	/*
++	 * Check if a matching program with already exists and replace
++	 * the existing program will be overridden if BPF_F_ALLOW_OVERRIDE
++	 * is specified in the attach flags.
++	 */
++	old_prog = find_attached_prog(old_array, prog);
++	if (old_prog && !(attr->attach_flags & BPF_F_ALLOW_OVERRIDE)) {
++		ret = -EEXIST;
++		goto unlock;
++	}
+ 
+-	ret = bpf_prog_array_copy(old_array, NULL, prog, &new_array);
++	ret = bpf_prog_array_copy(old_array, old_prog, prog, &new_array);
+ 	if (ret < 0) {
+ 		ret = -ENOMEM;
+ 		goto unlock;
+-- 
+2.20.1
+

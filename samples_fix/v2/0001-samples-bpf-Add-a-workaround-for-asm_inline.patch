@@ -1,0 +1,58 @@
+From 41c38755e64efe0ff2ab4b9dca84bdb2964fe66b Mon Sep 17 00:00:00 2001
+From: KP Singh <kpsingh@google.com>
+Date: Wed, 2 Oct 2019 18:20:24 +0200
+Subject: [PATCH v2] samples/bpf: Add a workaround for asm_inline
+
+This was added in:
+
+  commit eb111869301e ("compiler-types.h: add asm_inline definition")
+
+and breaks samples/bpf as clang does not support asm __inline.
+
+Co-developed-by: Florent Revest <revest@google.com>
+Signed-off-by: Florent Revest <revest@google.com>
+Signed-off-by: KP Singh <kpsingh@google.com>
+---
+
+Changes since v1:
+
+- Dropped the rename from asm_workaround.h to asm_goto_workaround.h
+- Dropped the fix for task_fd_query_user.c as it is updated in
+  https://lore.kernel.org/bpf/20191001112249.27341-1-bjorn.topel@gmail.com/
+
+ samples/bpf/asm_goto_workaround.h | 13 ++++++++++++-
+ 1 file changed, 12 insertions(+), 1 deletion(-)
+
+diff --git a/samples/bpf/asm_goto_workaround.h b/samples/bpf/asm_goto_workaround.h
+index 7409722727ca..7048bb3594d6 100644
+--- a/samples/bpf/asm_goto_workaround.h
++++ b/samples/bpf/asm_goto_workaround.h
+@@ -3,7 +3,8 @@
+ #ifndef __ASM_GOTO_WORKAROUND_H
+ #define __ASM_GOTO_WORKAROUND_H
+ 
+-/* this will bring in asm_volatile_goto macro definition
++/*
++ * This will bring in asm_volatile_goto and asm_inline macro definitions
+  * if enabled by compiler and config options.
+  */
+ #include <linux/types.h>
+@@ -13,5 +14,15 @@
+ #define asm_volatile_goto(x...) asm volatile("invalid use of asm_volatile_goto")
+ #endif
+ 
++/*
++ * asm_inline is defined as asm __inline in "include/linux/compiler_types.h"
++ * if supported by the kernel's CC (i.e CONFIG_CC_HAS_ASM_INLINE) which is not
++ * supported by CLANG.
++ */
++#ifdef asm_inline
++#undef asm_inline
++#define asm_inline asm
++#endif
++
+ #define volatile(x...) volatile("")
+ #endif
+-- 
+2.20.1
+

@@ -1,0 +1,182 @@
+From dfac1e1998d91e710a5e562ce0076c9ffb9ffb92 Mon Sep 17 00:00:00 2001
+From: KP Singh <kpsingh@google.com>
+Date: Wed, 8 Jan 2020 23:55:22 +0100
+Subject: [PATCH bpf-next v2 09/10] bpf: lsm: Add selftests for
+ BPF_PROG_TYPE_LSM
+
+* Load a BPF program that audits mprotect calls
+* Attach the program to the "file_mprotect" LSM hook
+* Initialize the perf events buffer and poll for audit events
+* Do an mprotect on some memory allocated on the heap
+* Verify if the audit event was received
+
+Signed-off-by: KP Singh <kpsingh@google.com>
+---
+ MAINTAINERS                                   |  2 +
+ tools/testing/selftests/bpf/lsm_helpers.h     | 19 ++++++
+ .../bpf/prog_tests/lsm_mprotect_audit.c       | 58 +++++++++++++++++++
+ .../selftests/bpf/progs/lsm_mprotect_audit.c  | 48 +++++++++++++++
+ 4 files changed, 127 insertions(+)
+ create mode 100644 tools/testing/selftests/bpf/lsm_helpers.h
+ create mode 100644 tools/testing/selftests/bpf/prog_tests/lsm_mprotect_audit.c
+ create mode 100644 tools/testing/selftests/bpf/progs/lsm_mprotect_audit.c
+
+diff --git a/MAINTAINERS b/MAINTAINERS
+index 02d7e05e9b75..5d553c2e7452 100644
+--- a/MAINTAINERS
++++ b/MAINTAINERS
+@@ -3210,6 +3210,8 @@ L:	bpf@vger.kernel.org
+ S:	Maintained
+ F:	security/bpf/
+ F:	include/linux/bpf_lsm.h
++F:	tools/testing/selftests/bpf/progs/lsm_mprotect_audit.c
++F:	tools/testing/selftests/bpf/prog_tests/lsm_mprotect_audit.c
+ 
+ BROADCOM B44 10/100 ETHERNET DRIVER
+ M:	Michael Chan <michael.chan@broadcom.com>
+diff --git a/tools/testing/selftests/bpf/lsm_helpers.h b/tools/testing/selftests/bpf/lsm_helpers.h
+new file mode 100644
+index 000000000000..8bad08f77654
+--- /dev/null
++++ b/tools/testing/selftests/bpf/lsm_helpers.h
+@@ -0,0 +1,19 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++
++/*
++ * Copyright 2019 Google LLC.
++ */
++#ifndef _LSM_HELPERS_H
++#define _LSM_HELPERS_H
++
++struct lsm_mprotect_audit_result {
++	/* This ensures that the LSM Hook only monitors the PID requested
++	 * by the loader
++	 */
++	__u32 monitored_pid;
++	/* The number of mprotect calls for the monitored PID.
++	 */
++	__u32 mprotect_count;
++};
++
++#endif /* _LSM_HELPERS_H */
+diff --git a/tools/testing/selftests/bpf/prog_tests/lsm_mprotect_audit.c b/tools/testing/selftests/bpf/prog_tests/lsm_mprotect_audit.c
+new file mode 100644
+index 000000000000..ff90b874eafc
+--- /dev/null
++++ b/tools/testing/selftests/bpf/prog_tests/lsm_mprotect_audit.c
+@@ -0,0 +1,58 @@
++// SPDX-License-Identifier: GPL-2.0
++
++/*
++ * Copyright 2019 Google LLC.
++ */
++
++#include <test_progs.h>
++#include <sys/mman.h>
++#include <unistd.h>
++#include <malloc.h>
++#include "lsm_helpers.h"
++#include "lsm_mprotect_audit.skel.h"
++
++int heap_mprotect(void)
++{
++	void *buf;
++	long sz;
++
++	sz = sysconf(_SC_PAGESIZE);
++	if (sz < 0)
++		return sz;
++
++	buf = memalign(sz, 2 * sz);
++	if (buf == NULL)
++		return -ENOMEM;
++
++	return mprotect(buf, sz, PROT_READ | PROT_EXEC);
++}
++
++void test_lsm_mprotect_audit(void)
++{
++	struct lsm_mprotect_audit_result *result;
++	struct lsm_mprotect_audit *skel = NULL;
++	int err, duration = 0;
++
++	skel = lsm_mprotect_audit__open_and_load();
++	if (CHECK(!skel, "skel_load", "lsm_mprotect_audit skeleton failed\n"))
++		goto close_prog;
++
++	err = lsm_mprotect_audit__attach(skel);
++	if (CHECK(err, "attach", "lsm_mprotect_audit attach failed: %d\n", err))
++		goto close_prog;
++
++	result = &skel->bss->result;
++	result->monitored_pid = getpid();
++
++	err = heap_mprotect();
++	if (CHECK(err < 0, "heap_mprotect", "err %d errno %d\n", err, errno))
++		goto close_prog;
++
++	/* Make sure mprotect_audit program was triggered
++	 * and detected an mprotect on the heap.
++	 */
++	CHECK_FAIL(result->mprotect_count != 1);
++
++close_prog:
++	lsm_mprotect_audit__destroy(skel);
++}
+diff --git a/tools/testing/selftests/bpf/progs/lsm_mprotect_audit.c b/tools/testing/selftests/bpf/progs/lsm_mprotect_audit.c
+new file mode 100644
+index 000000000000..f4569b418616
+--- /dev/null
++++ b/tools/testing/selftests/bpf/progs/lsm_mprotect_audit.c
+@@ -0,0 +1,48 @@
++// SPDX-License-Identifier: GPL-2.0
++
++/*
++ * Copyright 2019 Google LLC.
++ */
++
++#include <linux/bpf.h>
++#include <stdbool.h>
++#include "bpf_helpers.h"
++#include "bpf_trace_helpers.h"
++#include "lsm_helpers.h"
++
++char _license[] SEC("license") = "GPL";
++
++struct lsm_mprotect_audit_result result = {
++	.mprotect_count = 0,
++	.monitored_pid = 0,
++};
++
++/*
++ * Define some of the structs used in the BPF program.
++ * Only the field names and their sizes need to be the
++ * same as the kernel type, the order is irrelevant.
++ */
++struct mm_struct {
++	unsigned long start_brk, brk;
++} __attribute__((preserve_access_index));
++
++struct vm_area_struct {
++	unsigned long vm_start, vm_end;
++	struct mm_struct *vm_mm;
++} __attribute__((preserve_access_index));
++
++SEC("lsm/file_mprotect")
++int BPF_PROG(mprotect_audit, struct vm_area_struct *vma,
++	     unsigned long reqprot, unsigned long prot)
++{
++	__u32 pid = bpf_get_current_pid_tgid();
++	int is_heap = 0;
++
++	is_heap = (vma->vm_start >= vma->vm_mm->start_brk &&
++		   vma->vm_end <= vma->vm_mm->brk);
++
++	if (is_heap && result.monitored_pid == pid)
++		result.mprotect_count++;
++
++	return 0;
++}
+-- 
+2.20.1
+

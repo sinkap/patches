@@ -1,0 +1,14 @@
+#!/bin/bash
+
+cat << EOF
+Alexei Starovoitov <ast@kernel.org>
+Daniel Borkmann <daniel@iogearbox.net>
+Martin KaFai Lau <kafai@fb.com>
+Song Liu <songliubraving@fb.com>
+Yonghong Song <yhs@fb.com>
+Florent Revest <revest@chromium.org>
+Rasmus Villemoes <linux@rasmusvillemoes.dk>
+Arnaldo Carvalho de Melo <acme@redhat.com>
+EOF
+
+

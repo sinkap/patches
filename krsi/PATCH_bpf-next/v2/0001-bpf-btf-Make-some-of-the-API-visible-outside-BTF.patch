@@ -1,0 +1,80 @@
+From a3188d55ae21125df06ef0b3485ad07698462954 Mon Sep 17 00:00:00 2001
+From: KP Singh <kpsingh@google.com>
+Date: Mon, 30 Dec 2019 12:37:18 +0100
+Subject: [PATCH bpf-next v2 01/10] bpf: btf: Make some of the API visible
+ outside BTF
+
+- Add an extern for btf_vmlinux in btf.h
+- Add btf_type_by_name_kind, the LSM code does the combination of
+  btf_find_by_name_kind and btf_type_by_id quite often.
+
+Signed-off-by: KP Singh <kpsingh@google.com>
+---
+ include/linux/btf.h |  8 ++++++++
+ kernel/bpf/btf.c    | 17 +++++++++++++++++
+ 2 files changed, 25 insertions(+)
+
+diff --git a/include/linux/btf.h b/include/linux/btf.h
+index 881e9b76ef49..dc650d294bc4 100644
+--- a/include/linux/btf.h
++++ b/include/linux/btf.h
+@@ -15,6 +15,7 @@ struct btf_type;
+ union bpf_attr;
+ 
+ extern const struct file_operations btf_fops;
++extern struct btf *btf_vmlinux;
+ 
+ void btf_put(struct btf *btf);
+ int btf_new_fd(const union bpf_attr *attr);
+@@ -66,6 +67,8 @@ const struct btf_type *
+ btf_resolve_size(const struct btf *btf, const struct btf_type *type,
+ 		 u32 *type_size, const struct btf_type **elem_type,
+ 		 u32 *total_nelems);
++const struct btf_type *btf_type_by_name_kind(
++	struct btf *btf, const char *name, u8 kind);
+ 
+ #define for_each_member(i, struct_type, member)			\
+ 	for (i = 0, member = btf_type_member(struct_type);	\
+@@ -142,6 +145,11 @@ static inline const struct btf_type *btf_type_by_id(const struct btf *btf,
+ {
+ 	return NULL;
+ }
++static inline const struct btf_type *btf_type_by_name_kind(
++	struct btf *btf, const char *name, u8 kind)
++{
++	return ERR_PTR(-EOPNOTSUPP);
++}
+ static inline const char *btf_name_by_offset(const struct btf *btf,
+ 					     u32 offset)
+ {
+diff --git a/kernel/bpf/btf.c b/kernel/bpf/btf.c
+index 832b5d7fd892..b8968cec8718 100644
+--- a/kernel/bpf/btf.c
++++ b/kernel/bpf/btf.c
+@@ -436,6 +436,23 @@ const struct btf_type *btf_type_resolve_func_ptr(const struct btf *btf,
+ 	return NULL;
+ }
+ 
++const struct btf_type *btf_type_by_name_kind(
++	struct btf *btf, const char *name, u8 kind)
++{
++	const struct btf_type *t;
++	s32 type_id;
++
++	type_id = btf_find_by_name_kind(btf, name, kind);
++	if (type_id < 0)
++		return ERR_PTR(-EINVAL);
++
++	t = btf_type_by_id(btf, type_id);
++	if (!t)
++		return ERR_PTR(-EINVAL);
++
++	return t;
++}
++
+ /* Types that act only as a source, not sink or intermediate
+  * type when resolving.
+  */
+-- 
+2.20.1
+

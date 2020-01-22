@@ -1,0 +1,44 @@
+From 78041648caa456f8c9faf9f8244852b49499281e Mon Sep 17 00:00:00 2001
+From: KP Singh <kpsingh@google.com>
+Date: Mon, 21 Oct 2019 01:57:13 +0200
+Subject: [PATCH bpf-next v2] libbpf: Fix strncat bounds error in
+ libbpf_prog_type_by_name
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+On compiling samples with this change, one gets an error:
+
+ error: ‘strncat’ specified bound 118 equals destination size
+  [-Werror=stringop-truncation]
+
+    strncat(dst, name + section_names[i].len,
+    ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     sizeof(raw_tp_btf_name) - (dst - raw_tp_btf_name));
+     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+strncat requires the destination to have enough space for the
+terminating null byte.
+
+Fixes: f75a697e09137 ("libbpf: Auto-detect btf_id of BTF-based raw_tracepoint")
+Signed-off-by: KP Singh <kpsingh@google.com>
+---
+ tools/lib/bpf/libbpf.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/tools/lib/bpf/libbpf.c b/tools/lib/bpf/libbpf.c
+index 290684b504b7..dc7d493a7d3d 100644
+--- a/tools/lib/bpf/libbpf.c
++++ b/tools/lib/bpf/libbpf.c
+@@ -4693,7 +4693,7 @@ int libbpf_prog_type_by_name(const char *name, enum bpf_prog_type *prog_type,
+ 			}
+ 			/* prepend "btf_trace_" prefix per kernel convention */
+ 			strncat(dst, name + section_names[i].len,
+-				sizeof(raw_tp_btf_name) - (dst - raw_tp_btf_name));
++				sizeof(raw_tp_btf_name) - sizeof("btf_trace_"));
+ 			ret = btf__find_by_name(btf, raw_tp_btf_name);
+ 			btf__free(btf);
+ 			if (ret <= 0) {
+-- 
+2.20.1
+

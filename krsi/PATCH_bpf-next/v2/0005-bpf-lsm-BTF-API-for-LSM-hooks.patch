@@ -1,0 +1,196 @@
+From 2578da868fc01b17b2e50687d667f3821de9cd35 Mon Sep 17 00:00:00 2001
+From: KP Singh <kpsingh@google.com>
+Date: Wed, 8 Jan 2020 00:37:17 +0100
+Subject: [PATCH bpf-next v2 05/10] bpf: lsm: BTF API for LSM hooks
+
+The BTF API provides information required by the BPF verifier to
+attach eBPF programs to the LSM hooks by using the BTF information of
+two types:
+
+- struct security_hook_heads: This type provides the offset which
+  a new dynamically allocated security hook must be attached to.
+- union security_list_options: This provides the information about the
+  function prototype required by the hook.
+
+When the program is loaded:
+
+- The verifier receives the index of a member in struct
+  security_hook_heads to which a program must be attached as
+  prog->aux->lsm_hook_index. The index is one-based for better
+  verification.
+- bpf_lsm_type_by_index is used to determine the func_proto of
+  the LSM hook and updates prog->aux->attach_func_proto
+- bpf_lsm_head_by_index is used to determine the hlist_head to which
+  the BPF program must be attached.
+
+Signed-off-by: KP Singh <kpsingh@google.com>
+---
+ include/linux/bpf_lsm.h |  12 +++++
+ security/bpf/Kconfig    |   1 +
+ security/bpf/hooks.c    | 104 ++++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 117 insertions(+)
+
+diff --git a/include/linux/bpf_lsm.h b/include/linux/bpf_lsm.h
+index 9883cf25241c..a9b4f7b41c65 100644
+--- a/include/linux/bpf_lsm.h
++++ b/include/linux/bpf_lsm.h
+@@ -19,6 +19,8 @@ extern struct security_hook_heads bpf_lsm_hook_heads;
+ 
+ int bpf_lsm_srcu_read_lock(void);
+ void bpf_lsm_srcu_read_unlock(int idx);
++const struct btf_type *bpf_lsm_type_by_index(struct btf *btf, u32 offset);
++const struct btf_member *bpf_lsm_head_by_index(struct btf *btf, u32 id);
+ 
+ #define CALL_BPF_LSM_VOID_HOOKS(FUNC, ...)			\
+ 	do {							\
+@@ -65,6 +67,16 @@ static inline int bpf_lsm_srcu_read_lock(void)
+ 	return 0;
+ }
+ static inline void bpf_lsm_srcu_read_unlock(int idx) {}
++static inline const struct btf_type *bpf_lsm_type_by_index(
++	struct btf *btf, u32 index)
++{
++	return ERR_PTR(-EOPNOTSUPP);
++}
++static inline const struct btf_member *bpf_lsm_head_by_index(
++	struct btf *btf, u32 id)
++{
++	return ERR_PTR(-EOPNOTSUPP);
++}
+ 
+ #endif /* CONFIG_SECURITY_BPF */
+ 
+diff --git a/security/bpf/Kconfig b/security/bpf/Kconfig
+index 595e4ad597ae..9438d899b618 100644
+--- a/security/bpf/Kconfig
++++ b/security/bpf/Kconfig
+@@ -7,6 +7,7 @@ config SECURITY_BPF
+ 	depends on SECURITY
+ 	depends on BPF_SYSCALL
+ 	depends on SRCU
++	depends on DEBUG_INFO_BTF
+ 	help
+ 	  This enables instrumentation of the security hooks with
+ 	  eBPF programs.
+diff --git a/security/bpf/hooks.c b/security/bpf/hooks.c
+index b123d9cb4cd4..82725611693d 100644
+--- a/security/bpf/hooks.c
++++ b/security/bpf/hooks.c
+@@ -5,6 +5,8 @@
+  */
+ 
+ #include <linux/bpf_lsm.h>
++#include <linux/bpf.h>
++#include <linux/btf.h>
+ #include <linux/srcu.h>
+ 
+ DEFINE_STATIC_SRCU(security_hook_srcu);
+@@ -18,3 +20,105 @@ void bpf_lsm_srcu_read_unlock(int idx)
+ {
+ 	return srcu_read_unlock(&security_hook_srcu, idx);
+ }
++
++static inline int validate_hlist_head(struct btf *btf, u32 type_id)
++{
++	s32 hlist_id;
++
++	hlist_id = btf_find_by_name_kind(btf, "hlist_head", BTF_KIND_STRUCT);
++	if (hlist_id < 0 || hlist_id != type_id)
++		return -EINVAL;
++
++	return 0;
++}
++
++/* Find the BTF representation of the security_hook_heads member for a member
++ * with a given index in struct security_hook_heads.
++ */
++const struct btf_member *bpf_lsm_head_by_index(struct btf *btf, u32 index)
++{
++	const struct btf_member *member;
++	const struct btf_type *t;
++	u32 off, i;
++	int ret;
++
++	t = btf_type_by_name_kind(btf, "security_hook_heads", BTF_KIND_STRUCT);
++	if (WARN_ON_ONCE(IS_ERR(t)))
++		return ERR_CAST(t);
++
++	for_each_member(i, t, member) {
++		/* We've found the id requested and need to check the
++		 * the following:
++		 *
++		 * - Is it at a valid alignment for struct hlist_head?
++		 *
++		 * - Is it a valid hlist_head struct?
++		 */
++		if (index == i) {
++			off = btf_member_bit_offset(t, member);
++			if (off % 8)
++				/* valid c code cannot generate such btf */
++				return ERR_PTR(-EINVAL);
++			off /= 8;
++
++			if (off % __alignof__(struct hlist_head))
++				return ERR_PTR(-EINVAL);
++
++			ret = validate_hlist_head(btf, member->type);
++			if (ret < 0)
++				return ERR_PTR(ret);
++
++			return member;
++		}
++	}
++
++	return ERR_PTR(-ENOENT);
++}
++
++/* Given an index of a member in security_hook_heads return the
++ * corresponding type for the LSM hook. The members of the union
++ * security_list_options have the same name as the security_hook_heads which
++ * is ensured by the LSM_HOOK_INIT macro defined in include/linux/lsm_hooks.h
++ */
++const struct btf_type *bpf_lsm_type_by_index(struct btf *btf, u32 index)
++{
++	const struct btf_member *member, *hook_head = NULL;
++	const struct btf_type *t, *hook_type = NULL;
++	u32 i;
++
++	hook_head = bpf_lsm_head_by_index(btf, index);
++	if (IS_ERR(hook_head))
++		return ERR_PTR(PTR_ERR(hook_head));
++
++	t = btf_type_by_name_kind(btf, "security_list_options", BTF_KIND_UNION);
++	if (WARN_ON_ONCE(IS_ERR(t)))
++		return ERR_CAST(t);
++
++	for_each_member(i, t, member) {
++		if (hook_head->name_off == member->name_off) {
++			/* There should be only one member with the same name
++			 * as the LSM hook. This should never really happen
++			 * and either indicates malformed BTF or someone trying
++			 * trick the LSM.
++			 */
++			if (WARN_ON(hook_type))
++				return ERR_PTR(-EINVAL);
++
++			hook_type = btf_type_by_id(btf, member->type);
++			if (unlikely(!hook_type))
++				return ERR_PTR(-EINVAL);
++
++			if (!btf_type_is_ptr(hook_type))
++				return ERR_PTR(-EINVAL);
++		}
++	}
++
++	if (!hook_type)
++		return ERR_PTR(-ENOENT);
++
++	t = btf_type_by_id(btf, hook_type->type);
++	if (unlikely(!t))
++		return ERR_PTR(-EINVAL);
++
++	return t;
++}
+-- 
+2.20.1
+

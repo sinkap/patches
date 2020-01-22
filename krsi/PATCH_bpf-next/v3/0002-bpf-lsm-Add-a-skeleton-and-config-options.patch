@@ -1,0 +1,205 @@
+From 1578a2faa48a523ba2f9fa4cc6974fa8f9acb75a Mon Sep 17 00:00:00 2001
+From: KP Singh <kpsingh@google.com>
+Date: Tue, 7 Jan 2020 23:48:14 +0100
+Subject: [PATCH bpf-next v3 02/10] bpf: lsm: Add a skeleton and config options
+
+The LSM can be enabled by CONFIG_SECURITY_BPF.
+Without CONFIG_SECURITY_BPF_ENFORCE, the LSM will run the
+attached eBPF programs but not enforce MAC policy based
+on the return value of the attached programs.
+
+The BPF LSM is added with LSM_ORDER_LAST. The LSM has statically defined
+hooks defined at init with __lsm_ro_after_init and mutable hooks to
+a separate security_hook_heads (introduced in a subsequent patch).
+
+LSM_ORDER_LAST represents the behaviour of this LSM correctly (i.e all
+its hooks are executed at the end irrespective of the position of
+"bpf" in the list of LSMs).
+
+Signed-off-by: KP Singh <kpsingh@google.com>
+Reviewed-by: Brendan Jackman <jackmanb@google.com>
+Reviewed-by: Florent Revest <revest@google.com>
+Reviewed-by: Thomas Garnier <thgarnie@google.com>
+---
+ MAINTAINERS               |  7 +++++++
+ include/linux/lsm_hooks.h |  1 +
+ security/Kconfig          | 11 ++++++-----
+ security/Makefile         |  2 ++
+ security/bpf/Kconfig      | 22 ++++++++++++++++++++++
+ security/bpf/Makefile     |  5 +++++
+ security/bpf/lsm.c        | 26 ++++++++++++++++++++++++++
+ security/security.c       |  5 +++++
+ 8 files changed, 74 insertions(+), 5 deletions(-)
+ create mode 100644 security/bpf/Kconfig
+ create mode 100644 security/bpf/Makefile
+ create mode 100644 security/bpf/lsm.c
+
+diff --git a/MAINTAINERS b/MAINTAINERS
+index 66a2e5e07117..0941f478cfa5 100644
+--- a/MAINTAINERS
++++ b/MAINTAINERS
+@@ -3203,6 +3203,13 @@ S:	Supported
+ F:	arch/x86/net/
+ X:	arch/x86/net/bpf_jit_comp32.c
+ 
++BPF SECURITY MODULE
++M:	KP Singh <kpsingh@chromium.org>
++L:	linux-security-module@vger.kernel.org
++L:	bpf@vger.kernel.org
++S:	Maintained
++F:	security/bpf/
++
+ BROADCOM B44 10/100 ETHERNET DRIVER
+ M:	Michael Chan <michael.chan@broadcom.com>
+ L:	netdev@vger.kernel.org
+diff --git a/include/linux/lsm_hooks.h b/include/linux/lsm_hooks.h
+index 20d8cf194fb7..5f744fcb2275 100644
+--- a/include/linux/lsm_hooks.h
++++ b/include/linux/lsm_hooks.h
+@@ -2121,6 +2121,7 @@ extern void security_add_hooks(struct security_hook_list *hooks, int count,
+ enum lsm_order {
+ 	LSM_ORDER_FIRST = -1,	/* This is only for capabilities. */
+ 	LSM_ORDER_MUTABLE = 0,
++	LSM_ORDER_LAST = 1,
+ };
+ 
+ struct lsm_info {
+diff --git a/security/Kconfig b/security/Kconfig
+index 2a1a2d396228..6f1aab195e7d 100644
+--- a/security/Kconfig
++++ b/security/Kconfig
+@@ -236,6 +236,7 @@ source "security/tomoyo/Kconfig"
+ source "security/apparmor/Kconfig"
+ source "security/loadpin/Kconfig"
+ source "security/yama/Kconfig"
++source "security/bpf/Kconfig"
+ source "security/safesetid/Kconfig"
+ source "security/lockdown/Kconfig"
+ 
+@@ -277,11 +278,11 @@ endchoice
+ 
+ config LSM
+ 	string "Ordered list of enabled LSMs"
+-	default "lockdown,yama,loadpin,safesetid,integrity,smack,selinux,tomoyo,apparmor" if DEFAULT_SECURITY_SMACK
+-	default "lockdown,yama,loadpin,safesetid,integrity,apparmor,selinux,smack,tomoyo" if DEFAULT_SECURITY_APPARMOR
+-	default "lockdown,yama,loadpin,safesetid,integrity,tomoyo" if DEFAULT_SECURITY_TOMOYO
+-	default "lockdown,yama,loadpin,safesetid,integrity" if DEFAULT_SECURITY_DAC
+-	default "lockdown,yama,loadpin,safesetid,integrity,selinux,smack,tomoyo,apparmor"
++	default "lockdown,yama,loadpin,safesetid,integrity,smack,selinux,tomoyo,apparmor,bpf" if DEFAULT_SECURITY_SMACK
++	default "lockdown,yama,loadpin,safesetid,integrity,apparmor,selinux,smack,tomoyo,bpf" if DEFAULT_SECURITY_APPARMOR
++	default "lockdown,yama,loadpin,safesetid,integrity,tomoyo,bpf" if DEFAULT_SECURITY_TOMOYO
++	default "lockdown,yama,loadpin,safesetid,integrity,bpf" if DEFAULT_SECURITY_DAC
++	default "lockdown,yama,loadpin,safesetid,integrity,selinux,smack,tomoyo,apparmor,bpf"
+ 	help
+ 	  A comma-separated list of LSMs, in initialization order.
+ 	  Any LSMs left off this list will be ignored. This can be
+diff --git a/security/Makefile b/security/Makefile
+index be1dd9d2cb2f..50e6821dd7b7 100644
+--- a/security/Makefile
++++ b/security/Makefile
+@@ -12,6 +12,7 @@ subdir-$(CONFIG_SECURITY_YAMA)		+= yama
+ subdir-$(CONFIG_SECURITY_LOADPIN)	+= loadpin
+ subdir-$(CONFIG_SECURITY_SAFESETID)    += safesetid
+ subdir-$(CONFIG_SECURITY_LOCKDOWN_LSM)	+= lockdown
++subdir-$(CONFIG_SECURITY_BPF)		+= bpf
+ 
+ # always enable default capabilities
+ obj-y					+= commoncap.o
+@@ -29,6 +30,7 @@ obj-$(CONFIG_SECURITY_YAMA)		+= yama/
+ obj-$(CONFIG_SECURITY_LOADPIN)		+= loadpin/
+ obj-$(CONFIG_SECURITY_SAFESETID)       += safesetid/
+ obj-$(CONFIG_SECURITY_LOCKDOWN_LSM)	+= lockdown/
++obj-$(CONFIG_SECURITY_BPF)		+= bpf/
+ obj-$(CONFIG_CGROUP_DEVICE)		+= device_cgroup.o
+ 
+ # Object integrity file lists
+diff --git a/security/bpf/Kconfig b/security/bpf/Kconfig
+new file mode 100644
+index 000000000000..a5f6c67ae526
+--- /dev/null
++++ b/security/bpf/Kconfig
+@@ -0,0 +1,22 @@
++# SPDX-License-Identifier: GPL-2.0
++#
++# Copyright 2019 Google LLC.
++
++config SECURITY_BPF
++	bool "BPF-based MAC and audit policy"
++	depends on SECURITY
++	depends on BPF_SYSCALL
++	help
++	  This enables instrumentation of the security hooks with
++	  eBPF programs.
++
++	  If you are unsure how to answer this question, answer N.
++
++config SECURITY_BPF_ENFORCE
++	bool "Deny operations based on the evaluation of the attached programs"
++	depends on SECURITY_BPF
++	help
++	  eBPF programs attached to hooks can be used for both auditing and
++	  enforcement. Enabling enforcement implies that the evaluation result
++	  from the attached eBPF programs will allow or deny the operation
++	  guarded by the security hook.
+diff --git a/security/bpf/Makefile b/security/bpf/Makefile
+new file mode 100644
+index 000000000000..26a0ab6f99b7
+--- /dev/null
++++ b/security/bpf/Makefile
+@@ -0,0 +1,5 @@
++# SPDX-License-Identifier: GPL-2.0
++#
++# Copyright 2019 Google LLC.
++
++obj-$(CONFIG_SECURITY_BPF) := lsm.o
+diff --git a/security/bpf/lsm.c b/security/bpf/lsm.c
+new file mode 100644
+index 000000000000..51bddc025d4e
+--- /dev/null
++++ b/security/bpf/lsm.c
+@@ -0,0 +1,26 @@
++// SPDX-License-Identifier: GPL-2.0
++
++/*
++ * Copyright 2019 Google LLC.
++ */
++
++#include <linux/lsm_hooks.h>
++
++/* This is only for internal hooks, always statically shipped as part of the
++ * BPF LSM. Statically defined hooks are appeneded to the security_hook_heads
++ * which is common for LSMs and R/O after init.
++ */
++static struct security_hook_list bpf_lsm_hooks[] __lsm_ro_after_init = {};
++
++static int __init bpf_lsm_init(void)
++{
++	security_add_hooks(bpf_lsm_hooks, ARRAY_SIZE(bpf_lsm_hooks), "bpf");
++	pr_info("LSM support for eBPF active\n");
++	return 0;
++}
++
++DEFINE_LSM(bpf) = {
++	.name = "bpf",
++	.init = bpf_lsm_init,
++	.order = LSM_ORDER_LAST,
++};
+diff --git a/security/security.c b/security/security.c
+index cd2d18d2d279..30a8aa700557 100644
+--- a/security/security.c
++++ b/security/security.c
+@@ -264,6 +264,11 @@ static void __init ordered_lsm_parse(const char *order, const char *origin)
+ 		}
+ 	}
+ 
++	for (lsm = __start_lsm_info; lsm < __end_lsm_info; lsm++) {
++		if (lsm->order == LSM_ORDER_LAST)
++			append_ordered_lsm(lsm, "last");
++	}
++
+ 	/* Disable all LSMs not in the ordered list. */
+ 	for (lsm = __start_lsm_info; lsm < __end_lsm_info; lsm++) {
+ 		if (exists_ordered_lsm(lsm))
+-- 
+2.20.1
+

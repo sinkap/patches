@@ -1,0 +1,132 @@
+From a1bec1e7729e3d721721eebfca8c7bdb9c987c6d Mon Sep 17 00:00:00 2001
+From: KP Singh <kpsingh@google.com>
+Date: Wed, 16 Oct 2019 15:00:33 +0200
+Subject: [PATCH bpf-next 03/13] bpf: lsm: Introduce types for eBPF based LSM
+
+A new eBPF program type BPF_PROG_TYPE_LSM with an
+expected attach type of BPF_LSM_MAC. An -EINVAL error is returned if an
+attachment is currently requested.
+
+Signed-off-by: KP Singh <kpsingh@google.com>
+---
+ include/linux/bpf_types.h      |  4 ++++
+ include/uapi/linux/bpf.h       |  2 ++
+ kernel/bpf/syscall.c           |  6 ++++++
+ security/bpf/Makefile          |  2 +-
+ security/bpf/ops.c             | 14 ++++++++++++++
+ tools/include/uapi/linux/bpf.h |  2 ++
+ 6 files changed, 29 insertions(+), 1 deletion(-)
+ create mode 100644 security/bpf/ops.c
+
+diff --git a/include/linux/bpf_types.h b/include/linux/bpf_types.h
+index 93740b3614d7..5f48161529b4 100644
+--- a/include/linux/bpf_types.h
++++ b/include/linux/bpf_types.h
+@@ -65,6 +65,10 @@ BPF_PROG_TYPE(BPF_PROG_TYPE_LIRC_MODE2, lirc_mode2,
+ BPF_PROG_TYPE(BPF_PROG_TYPE_SK_REUSEPORT, sk_reuseport,
+ 	      struct sk_reuseport_md, struct sk_reuseport_kern)
+ #endif
++#ifdef CONFIG_SECURITY_BPF
++BPF_PROG_TYPE(BPF_PROG_TYPE_LSM, lsm,
++	       void *, void *)
++#endif
+ 
+ BPF_MAP_TYPE(BPF_MAP_TYPE_ARRAY, array_map_ops)
+ BPF_MAP_TYPE(BPF_MAP_TYPE_PERCPU_ARRAY, percpu_array_map_ops)
+diff --git a/include/uapi/linux/bpf.h b/include/uapi/linux/bpf.h
+index dbbcf0b02970..fc64ae865526 100644
+--- a/include/uapi/linux/bpf.h
++++ b/include/uapi/linux/bpf.h
+@@ -174,6 +174,7 @@ enum bpf_prog_type {
+ 	BPF_PROG_TYPE_RAW_TRACEPOINT_WRITABLE,
+ 	BPF_PROG_TYPE_CGROUP_SOCKOPT,
+ 	BPF_PROG_TYPE_TRACING,
++	BPF_PROG_TYPE_LSM,
+ };
+ 
+ enum bpf_attach_type {
+@@ -203,6 +204,7 @@ enum bpf_attach_type {
+ 	BPF_TRACE_RAW_TP,
+ 	BPF_TRACE_FENTRY,
+ 	BPF_TRACE_FEXIT,
++	BPF_LSM_MAC,
+ 	__MAX_BPF_ATTACH_TYPE
+ };
+ 
+diff --git a/kernel/bpf/syscall.c b/kernel/bpf/syscall.c
+index e3461ec59570..5a773fc6f9f5 100644
+--- a/kernel/bpf/syscall.c
++++ b/kernel/bpf/syscall.c
+@@ -2096,6 +2096,9 @@ static int bpf_prog_attach(const union bpf_attr *attr)
+ 	case BPF_LIRC_MODE2:
+ 		ptype = BPF_PROG_TYPE_LIRC_MODE2;
+ 		break;
++	case BPF_LSM_MAC:
++		ptype = BPF_PROG_TYPE_LSM;
++		break;
+ 	case BPF_FLOW_DISSECTOR:
+ 		ptype = BPF_PROG_TYPE_FLOW_DISSECTOR;
+ 		break;
+@@ -2127,6 +2130,9 @@ static int bpf_prog_attach(const union bpf_attr *attr)
+ 	case BPF_PROG_TYPE_LIRC_MODE2:
+ 		ret = lirc_prog_attach(attr, prog);
+ 		break;
++	case BPF_PROG_TYPE_LSM:
++		ret = -EINVAL;
++		break;
+ 	case BPF_PROG_TYPE_FLOW_DISSECTOR:
+ 		ret = skb_flow_dissector_bpf_prog_attach(attr, prog);
+ 		break;
+diff --git a/security/bpf/Makefile b/security/bpf/Makefile
+index 26a0ab6f99b7..c78a8a056e7e 100644
+--- a/security/bpf/Makefile
++++ b/security/bpf/Makefile
+@@ -2,4 +2,4 @@
+ #
+ # Copyright 2019 Google LLC.
+ 
+-obj-$(CONFIG_SECURITY_BPF) := lsm.o
++obj-$(CONFIG_SECURITY_BPF) := lsm.o ops.o
+diff --git a/security/bpf/ops.c b/security/bpf/ops.c
+new file mode 100644
+index 000000000000..2fa3ebdf598d
+--- /dev/null
++++ b/security/bpf/ops.c
+@@ -0,0 +1,14 @@
++// SPDX-License-Identifier: GPL-2.0
++
++/*
++ * Copyright 2019 Google LLC.
++ */
++
++#include <linux/filter.h>
++#include <linux/bpf.h>
++
++const struct bpf_prog_ops lsm_prog_ops = {
++};
++
++const struct bpf_verifier_ops lsm_verifier_ops = {
++};
+diff --git a/tools/include/uapi/linux/bpf.h b/tools/include/uapi/linux/bpf.h
+index dbbcf0b02970..fc64ae865526 100644
+--- a/tools/include/uapi/linux/bpf.h
++++ b/tools/include/uapi/linux/bpf.h
+@@ -174,6 +174,7 @@ enum bpf_prog_type {
+ 	BPF_PROG_TYPE_RAW_TRACEPOINT_WRITABLE,
+ 	BPF_PROG_TYPE_CGROUP_SOCKOPT,
+ 	BPF_PROG_TYPE_TRACING,
++	BPF_PROG_TYPE_LSM,
+ };
+ 
+ enum bpf_attach_type {
+@@ -203,6 +204,7 @@ enum bpf_attach_type {
+ 	BPF_TRACE_RAW_TP,
+ 	BPF_TRACE_FENTRY,
+ 	BPF_TRACE_FEXIT,
++	BPF_LSM_MAC,
+ 	__MAX_BPF_ATTACH_TYPE
+ };
+ 
+-- 
+2.20.1
+

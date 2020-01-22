@@ -1,0 +1,66 @@
+From 53fea8b37d5ebda7b76284f5b501f2f149f42d55 Mon Sep 17 00:00:00 2001
+From: KP Singh <kpsingh@google.com>
+Date: Tue, 10 Sep 2019 16:23:12 +0200
+Subject: [RFC v2 00/14] *** SUBJECT HERE ***
+
+*** BLURB HERE ***
+
+KP Singh (14):
+  krsi: Add a skeleton and config options for the KRSI LSM
+  krsi: Introduce types for KRSI eBPF
+  bpf: krsi: sync BPF UAPI header with tools
+  krsi: Add support in libbpf for BPF_PROG_TYPE_KRSI
+  krsi: Initialize KRSI hooks and create files in securityfs
+  krsi: Implement eBPF operations, attachment and execution
+  krsi: Check for premissions on eBPF attachment
+  krsi: Show attached program names in hook read handler.
+  krsi: Add a helper function for bpf_perf_event_output
+  krsi: Handle attachment of the same program
+  krsi: Pin argument pages in bprm_check_security hook
+  krsi: Add an eBPF helper function to get the value of an env variable
+  krsi: Provide an example to read and log environment variables
+  krsi: Pin arg pages only when needed
+
+ MAINTAINERS                               |   8 +
+ include/linux/bpf_types.h                 |   3 +
+ include/linux/krsi.h                      |  19 ++
+ include/uapi/linux/bpf.h                  |  44 ++-
+ kernel/bpf/syscall.c                      |   7 +
+ samples/bpf/.gitignore                    |   1 +
+ samples/bpf/Makefile                      |   3 +
+ samples/bpf/krsi_helpers.h                |  31 ++
+ samples/bpf/krsi_kern.c                   |  52 ++++
+ samples/bpf/krsi_user.c                   | 202 +++++++++++++
+ security/Kconfig                          |   1 +
+ security/Makefile                         |   2 +
+ security/krsi/Kconfig                     |  22 ++
+ security/krsi/Makefile                    |   3 +
+ security/krsi/include/hooks.h             |  22 ++
+ security/krsi/include/krsi_fs.h           |  19 ++
+ security/krsi/include/krsi_init.h         | 106 +++++++
+ security/krsi/krsi.c                      | 157 ++++++++++
+ security/krsi/krsi_fs.c                   | 190 ++++++++++++
+ security/krsi/ops.c                       | 342 ++++++++++++++++++++++
+ tools/include/uapi/linux/bpf.h            |  44 ++-
+ tools/lib/bpf/libbpf.c                    |   4 +
+ tools/lib/bpf/libbpf.h                    |   2 +
+ tools/lib/bpf/libbpf.map                  |   2 +
+ tools/lib/bpf/libbpf_probes.c             |   1 +
+ tools/testing/selftests/bpf/bpf_helpers.h |   3 +
+ 26 files changed, 1288 insertions(+), 2 deletions(-)
+ create mode 100644 include/linux/krsi.h
+ create mode 100644 samples/bpf/krsi_helpers.h
+ create mode 100644 samples/bpf/krsi_kern.c
+ create mode 100644 samples/bpf/krsi_user.c
+ create mode 100644 security/krsi/Kconfig
+ create mode 100644 security/krsi/Makefile
+ create mode 100644 security/krsi/include/hooks.h
+ create mode 100644 security/krsi/include/krsi_fs.h
+ create mode 100644 security/krsi/include/krsi_init.h
+ create mode 100644 security/krsi/krsi.c
+ create mode 100644 security/krsi/krsi_fs.c
+ create mode 100644 security/krsi/ops.c
+
+-- 
+2.20.1
+

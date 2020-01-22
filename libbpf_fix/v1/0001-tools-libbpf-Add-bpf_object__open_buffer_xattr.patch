@@ -1,0 +1,143 @@
+From f60eed736231966733af219384a35296402f53e8 Mon Sep 17 00:00:00 2001
+From: KP Singh <kpsingh@google.com>
+Date: Fri, 27 Sep 2019 11:57:58 +0200
+Subject: [PATCH] tools: libbpf: Add bpf_object__open_buffer_xattr
+
+Introduce struct bpf_object_open_buffer_attr and an API function,
+bpf_object__open_xattr, as the existing API, bpf_object__open_buffer,
+doesn't provide a way to specify neither the "needs_kver" nor
+the "flags" parameter to the internal call to the
+__bpf_object__open which makes it inconvenient for loading BPF
+objects that do not require a kernel version from a buffer.
+
+The flags attribute in the bpf_object_open_buffer_attr is set
+to MAPS_RELAX_COMPAT when used in bpf_object__open_buffer to
+maintain backward compatibility as this was added to load objects
+with non-compat map definitions in:
+
+commit c034a177d3c8 ("bpf: bpftool, add flag to allow non-compat map
+		      definitions")
+
+and bpf_object__open_buffer was called with this flag enabled (as a
+boolean true value).
+
+The existing "bpf_object__open_xattr" cannot be modified to
+maintain API compatibility.
+
+Reported-by: Anton Protopopov <a.s.protopopov@gmail.com>
+Signed-off-by: KP Singh <kpsingh@google.com>
+---
+ tools/lib/bpf/libbpf.c   | 39 ++++++++++++++++++++++++++++-----------
+ tools/lib/bpf/libbpf.h   | 10 ++++++++++
+ tools/lib/bpf/libbpf.map |  5 +++++
+ 3 files changed, 43 insertions(+), 11 deletions(-)
+
+This patch is assimilates the feedback from:
+
+  https://lore.kernel.org/bpf/20190815000330.12044-1-a.s.protopopov@gmail.com/
+
+I have added a "Reported-by:" tag, but please feel free to update to
+"Co-developed-by" if it's more appropriate from an attribution perspective.
+
+diff --git a/tools/lib/bpf/libbpf.c b/tools/lib/bpf/libbpf.c
+index 2b57d7ea7836..1f1f2e92832b 100644
+--- a/tools/lib/bpf/libbpf.c
++++ b/tools/lib/bpf/libbpf.c
+@@ -2752,25 +2752,42 @@ struct bpf_object *bpf_object__open(const char *path)
+ 	return bpf_object__open_xattr(&attr);
+ }
+ 
+-struct bpf_object *bpf_object__open_buffer(void *obj_buf,
+-					   size_t obj_buf_sz,
+-					   const char *name)
++struct bpf_object *
++bpf_object__open_buffer_xattr(struct bpf_object_open_buffer_attr *attr)
+ {
+ 	char tmp_name[64];
+ 
+ 	/* param validation */
+-	if (!obj_buf || obj_buf_sz <= 0)
+-		return NULL;
++	if (!attr || !attr->obj_buf || !(attr->obj_buf_sz <= 0))
++		return ERR_PTR(-EINVAL);
+ 
+-	if (!name) {
++	if (!attr->obj_name) {
+ 		snprintf(tmp_name, sizeof(tmp_name), "%lx-%lx",
+-			 (unsigned long)obj_buf,
+-			 (unsigned long)obj_buf_sz);
+-		name = tmp_name;
++			 (unsigned long)attr->obj_buf,
++			 (unsigned long)attr->obj_buf_sz);
++		attr->obj_name = tmp_name;
+ 	}
+-	pr_debug("loading object '%s' from buffer\n", name);
++	pr_debug("loading object '%s' from buffer\n", attr->obj_name);
++
++	return __bpf_object__open(attr->obj_name, attr->obj_buf,
++				  attr->obj_buf_sz,
++				  bpf_prog_type__needs_kver(attr->prog_type),
++				  attr->flags);
++}
++
++struct bpf_object *bpf_object__open_buffer(void *obj_buf,
++					   size_t obj_buf_sz,
++					   const char *name)
++{
++	struct bpf_object_open_buffer_attr attr = {
++		.obj_name	= name,
++		.obj_buf	= obj_buf,
++		.obj_buf_sz	= obj_buf_sz,
++		.prog_type	= BPF_PROG_TYPE_UNSPEC,
++		.flags		=  MAPS_RELAX_COMPAT,
++	};
+ 
+-	return __bpf_object__open(name, obj_buf, obj_buf_sz, true, true);
++	return bpf_object__open_buffer_xattr(&attr);
+ }
+ 
+ int bpf_object__unload(struct bpf_object *obj)
+diff --git a/tools/lib/bpf/libbpf.h b/tools/lib/bpf/libbpf.h
+index 5cbf459ece0b..ad0f5a263594 100644
+--- a/tools/lib/bpf/libbpf.h
++++ b/tools/lib/bpf/libbpf.h
+@@ -67,6 +67,14 @@ struct bpf_object_open_attr {
+ 	enum bpf_prog_type prog_type;
+ };
+ 
++struct bpf_object_open_buffer_attr {
++	const char *obj_name;
++	void *obj_buf;
++	size_t obj_buf_sz;
++	enum bpf_prog_type prog_type;
++	int flags;
++};
++
+ LIBBPF_API struct bpf_object *bpf_object__open(const char *path);
+ LIBBPF_API struct bpf_object *
+ bpf_object__open_xattr(struct bpf_object_open_attr *attr);
+@@ -75,6 +83,8 @@ struct bpf_object *__bpf_object__open_xattr(struct bpf_object_open_attr *attr,
+ LIBBPF_API struct bpf_object *bpf_object__open_buffer(void *obj_buf,
+ 						      size_t obj_buf_sz,
+ 						      const char *name);
++LIBBPF_API struct bpf_object *
++bpf_object__open_buffer_xattr(struct bpf_object_open_buffer_attr *attr);
+ int bpf_object__section_size(const struct bpf_object *obj, const char *name,
+ 			     __u32 *size);
+ int bpf_object__variable_offset(const struct bpf_object *obj, const char *name,
+diff --git a/tools/lib/bpf/libbpf.map b/tools/lib/bpf/libbpf.map
+index f9d316e873d8..4d5dcc58c73d 100644
+--- a/tools/lib/bpf/libbpf.map
++++ b/tools/lib/bpf/libbpf.map
+@@ -184,3 +184,8 @@ LIBBPF_0.0.4 {
+ 		perf_buffer__new_raw;
+ 		perf_buffer__poll;
+ } LIBBPF_0.0.3;
++
++LIBBPF_0.0.5 {
++	global:
++		bpf_object__open_buffer_xattr;
++} LIBBPF_0.0.4;
+-- 
+2.20.1
+

@@ -1,0 +1,155 @@
+From 31ff57e7af1c6354a635456d06285cd7afc3ac39 Mon Sep 17 00:00:00 2001
+From: KP Singh <kpsingh@google.com>
+Date: Tue, 10 Sep 2019 13:55:22 +0200
+Subject: [PATCH bpf-next 09/13] bpf: lsm: Add a helper function
+ bpf_lsm_event_output
+
+This helper is similar to bpf_perf_event_output except that
+it does need a ctx argument which is more usable in the
+BTF based LSM programs where the context is converted to
+the signature of the attacthed BTF type.
+
+An example usage of this function would be:
+
+struct {
+         __uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
+         __uint(key_size, sizeof(int));
+         __uint(value_size, sizeof(u32));
+} perf_map SEC(".maps");
+
+BPF_TRACE_1(bpf_prog1, "lsm/bprm_check_security,
+	    struct linux_binprm *, bprm)
+{
+	char buf[BUF_SIZE];
+	int len;
+	u64 flags = BPF_F_CURRENT_CPU;
+
+	/* some logic that fills up buf with len data */
+	len = fill_up_buf(buf);
+	if (len < 0)
+		return len;
+	if (len > BU)
+		return 0;
+
+	bpf_lsm_event_output(&perf_map, flags, buf, len);
+	return 0;
+}
+
+Signed-off-by: KP Singh <kpsingh@google.com>
+---
+ include/uapi/linux/bpf.h       | 10 +++++++++-
+ kernel/bpf/verifier.c          |  1 +
+ security/bpf/ops.c             | 21 +++++++++++++++++++++
+ tools/include/uapi/linux/bpf.h | 10 +++++++++-
+ 4 files changed, 40 insertions(+), 2 deletions(-)
+
+diff --git a/include/uapi/linux/bpf.h b/include/uapi/linux/bpf.h
+index fc64ae865526..3511fa271c9b 100644
+--- a/include/uapi/linux/bpf.h
++++ b/include/uapi/linux/bpf.h
+@@ -2823,6 +2823,13 @@ union bpf_attr {
+  * 	Return
+  * 		On success, the strictly positive length of the string,	including
+  * 		the trailing NUL character. On error, a negative value.
++ *
++ * int bpf_lsm_event_output(struct bpf_map *map, u64 flags, void *data, u64 size)
++ *	Description
++ *		This helper is similar to bpf_perf_event_output except that it
++ *		it does not need a context argument.
++ *	Return
++ *		0 on success, or a negative error in case of failure.
+  */
+ #define __BPF_FUNC_MAPPER(FN)		\
+ 	FN(unspec),			\
+@@ -2940,7 +2947,8 @@ union bpf_attr {
+ 	FN(probe_read_user),		\
+ 	FN(probe_read_kernel),		\
+ 	FN(probe_read_user_str),	\
+-	FN(probe_read_kernel_str),
++	FN(probe_read_kernel_str),	\
++	FN(lsm_event_output),		\
+ 
+ /* integer value in 'imm' field of BPF_CALL instruction selects which helper
+  * function eBPF program intends to call
+diff --git a/kernel/bpf/verifier.c b/kernel/bpf/verifier.c
+index 0d1231d9c1ef..ff050fd71e9f 100644
+--- a/kernel/bpf/verifier.c
++++ b/kernel/bpf/verifier.c
+@@ -3641,6 +3641,7 @@ static int check_map_func_compatibility(struct bpf_verifier_env *env,
+ 		if (func_id != BPF_FUNC_perf_event_read &&
+ 		    func_id != BPF_FUNC_perf_event_output &&
+ 		    func_id != BPF_FUNC_skb_output &&
++		    func_id != BPF_FUNC_lsm_event_output &&
+ 		    func_id != BPF_FUNC_perf_event_read_value)
+ 			goto error;
+ 		break;
+diff --git a/security/bpf/ops.c b/security/bpf/ops.c
+index eb8a8db28109..e9aae2ce718c 100644
+--- a/security/bpf/ops.c
++++ b/security/bpf/ops.c
+@@ -129,6 +129,25 @@ int bpf_lsm_detach(const union bpf_attr *attr)
+ const struct bpf_prog_ops lsm_prog_ops = {
+ };
+ 
++BPF_CALL_4(bpf_lsm_event_output,
++	   struct bpf_map *, map, u64, flags, void *, data, u64, size)
++{
++	if (unlikely(flags & ~(BPF_F_INDEX_MASK)))
++		return -EINVAL;
++
++	return bpf_event_output(map, flags, data, size, NULL, 0, NULL);
++}
++
++static const struct bpf_func_proto bpf_lsm_event_output_proto =  {
++	.func		= bpf_lsm_event_output,
++	.gpl_only       = true,
++	.ret_type       = RET_INTEGER,
++	.arg1_type      = ARG_CONST_MAP_PTR,
++	.arg2_type      = ARG_ANYTHING,
++	.arg3_type      = ARG_PTR_TO_MEM,
++	.arg4_type      = ARG_CONST_SIZE_OR_ZERO,
++};
++
+ static const struct bpf_func_proto *get_bpf_func_proto(enum bpf_func_id
+ 		func_id, const struct bpf_prog *prog)
+ {
+@@ -137,6 +156,8 @@ static const struct bpf_func_proto *get_bpf_func_proto(enum bpf_func_id
+ 		return &bpf_map_lookup_elem_proto;
+ 	case BPF_FUNC_get_current_pid_tgid:
+ 		return &bpf_get_current_pid_tgid_proto;
++	case BPF_FUNC_lsm_event_output:
++		return &bpf_lsm_event_output_proto;
+ 	default:
+ 		return NULL;
+ 	}
+diff --git a/tools/include/uapi/linux/bpf.h b/tools/include/uapi/linux/bpf.h
+index fc64ae865526..3511fa271c9b 100644
+--- a/tools/include/uapi/linux/bpf.h
++++ b/tools/include/uapi/linux/bpf.h
+@@ -2823,6 +2823,13 @@ union bpf_attr {
+  * 	Return
+  * 		On success, the strictly positive length of the string,	including
+  * 		the trailing NUL character. On error, a negative value.
++ *
++ * int bpf_lsm_event_output(struct bpf_map *map, u64 flags, void *data, u64 size)
++ *	Description
++ *		This helper is similar to bpf_perf_event_output except that it
++ *		it does not need a context argument.
++ *	Return
++ *		0 on success, or a negative error in case of failure.
+  */
+ #define __BPF_FUNC_MAPPER(FN)		\
+ 	FN(unspec),			\
+@@ -2940,7 +2947,8 @@ union bpf_attr {
+ 	FN(probe_read_user),		\
+ 	FN(probe_read_kernel),		\
+ 	FN(probe_read_user_str),	\
+-	FN(probe_read_kernel_str),
++	FN(probe_read_kernel_str),	\
++	FN(lsm_event_output),		\
+ 
+ /* integer value in 'imm' field of BPF_CALL instruction selects which helper
+  * function eBPF program intends to call
+-- 
+2.20.1
+

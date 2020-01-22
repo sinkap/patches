@@ -1,0 +1,33 @@
+From 3df99884328e72318ab1ccd5c5e22dc5c475d709 Mon Sep 17 00:00:00 2001
+From: KP Singh <kpsingh@google.com>
+Date: Fri, 7 Jun 2019 02:22:25 +0200
+Subject: [RFC v2 03/14] bpf: krsi: sync BPF UAPI header with tools
+
+Signed-off-by: KP Singh <kpsingh@google.com>
+---
+ tools/include/uapi/linux/bpf.h | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/tools/include/uapi/linux/bpf.h b/tools/include/uapi/linux/bpf.h
+index a5aa7d3ac6a1..32ab38f1a2fe 100644
+--- a/tools/include/uapi/linux/bpf.h
++++ b/tools/include/uapi/linux/bpf.h
+@@ -171,6 +171,7 @@ enum bpf_prog_type {
+ 	BPF_PROG_TYPE_CGROUP_SYSCTL,
+ 	BPF_PROG_TYPE_RAW_TRACEPOINT_WRITABLE,
+ 	BPF_PROG_TYPE_CGROUP_SOCKOPT,
++	BPF_PROG_TYPE_KRSI,
+ };
+ 
+ enum bpf_attach_type {
+@@ -197,6 +198,7 @@ enum bpf_attach_type {
+ 	BPF_CGROUP_UDP6_RECVMSG,
+ 	BPF_CGROUP_GETSOCKOPT,
+ 	BPF_CGROUP_SETSOCKOPT,
++	BPF_KRSI,
+ 	__MAX_BPF_ATTACH_TYPE
+ };
+ 
+-- 
+2.20.1
+

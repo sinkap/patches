@@ -1,0 +1,115 @@
+From f7243f5c0e06a9c3a0115ba98304cf25261f9937 Mon Sep 17 00:00:00 2001
+From: KP Singh <kpsingh@google.com>
+Date: Thu, 5 Sep 2019 13:25:07 +0200
+Subject: [RFC v1 08/14] krsi: Show attached program names in hook read
+ handler.
+
+For inspectability the system administrator should be able to view the
+list of active KRSI programs:
+
+   bash # cat /sys/kernel/security/krsi/process_execution
+   bpf_prog1
+
+Signed-off-by: KP Singh <kpsingh@google.com>
+---
+ security/krsi/krsi_fs.c | 76 ++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 75 insertions(+), 1 deletion(-)
+
+diff --git a/security/krsi/krsi_fs.c b/security/krsi/krsi_fs.c
+index 3ba18b52ce85..0ebf4fabe935 100644
+--- a/security/krsi/krsi_fs.c
++++ b/security/krsi/krsi_fs.c
+@@ -6,6 +6,7 @@
+ #include <linux/fs.h>
+ #include <linux/types.h>
+ #include <linux/filter.h>
++#include <linux/seq_file.h>
+ #include <linux/bpf.h>
+ #include <linux/security.h>
+ 
+@@ -16,8 +17,81 @@ extern struct krsi_hook krsi_hooks_list[];
+ 
+ static struct dentry *krsi_dir;
+ 
++static void *seq_start(struct seq_file *m, loff_t *pos)
++	__acquires(rcu)
++{
++	struct krsi_hook *h;
++	struct dentry *dentry;
++	struct bpf_prog_array *progs;
++	struct bpf_prog_array_item *item;
++
++	/*
++	 * rcu_read_lock() must be held before any return statement
++	 * because the stop() will always be called and thus call
++	 * rcu_read_unlock()
++	 */
++	rcu_read_lock();
++
++	dentry = file_dentry(m->file);
++	h = dentry->d_fsdata;
++	if (WARN_ON(!h))
++		return ERR_PTR(-EFAULT);
++
++	progs = rcu_dereference(h->progs);
++	if ((*pos) >= bpf_prog_array_length(progs))
++		return NULL;
++
++	item = progs->items + *pos;
++	if (!item->prog)
++		return NULL;
++
++	return item;
++}
++
++static void *seq_next(struct seq_file *m, void *v, loff_t *pos)
++{
++	struct bpf_prog_array_item *item = v;
++
++	item++;
++	++*pos;
++
++	if (!item->prog)
++		return NULL;
++
++	return item;
++}
++
++static void seq_stop(struct seq_file *m, void *v)
++	__releases(rcu)
++{
++	rcu_read_unlock();
++}
++
++static int show_prog(struct seq_file *m, void *v)
++{
++	struct bpf_prog_array_item *item = v;
++
++	seq_printf(m, "%s\n", item->prog->aux->name);
++	return 0;
++}
++
++static const struct seq_operations seq_ops = {
++	.show	= show_prog,
++	.start	= seq_start,
++	.next	= seq_next,
++	.stop	= seq_stop,
++};
++
++static int hook_open(struct inode *inode, struct file *file)
++{
++	return seq_open(file, &seq_ops);
++}
++
+ static const struct file_operations krsi_hook_ops = {
+-	.llseek = generic_file_llseek,
++	.open		= hook_open,
++	.read		= seq_read,
++	.llseek		= seq_lseek,
++	.release	= seq_release,
+ };
+ 
+ int krsi_fs_initialized;
+-- 
+2.20.1
+

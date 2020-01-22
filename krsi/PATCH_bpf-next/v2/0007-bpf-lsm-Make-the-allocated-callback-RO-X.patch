@@ -1,0 +1,41 @@
+From e74989133ffc9398f39c4498d98ee19df5a976e6 Mon Sep 17 00:00:00 2001
+From: KP Singh <kpsingh@google.com>
+Date: Wed, 8 Jan 2020 22:27:08 +0100
+Subject: [PATCH bpf-next v2 07/10] bpf: lsm: Make the allocated callback RO+X
+
+This patch is not needed after arch_bpf_prepare_trampoline
+moves to using text_poke.
+
+The two IPI TLB flushes can be further optimized if a new API to handle
+W^X in the kernel emerges as an outcome of:
+
+  https://lore.kernel.org/bpf/20200103234725.22846-1-kpsingh@chromium.org/
+
+Signed-off-by: KP Singh <kpsingh@google.com>
+---
+ security/bpf/hooks.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/security/bpf/hooks.c b/security/bpf/hooks.c
+index 4e71da0e8e9e..30f68341f5ef 100644
+--- a/security/bpf/hooks.c
++++ b/security/bpf/hooks.c
+@@ -222,6 +222,15 @@ static struct bpf_lsm_hook *bpf_lsm_hook_alloc(
+ 		goto error;
+ 	}
+ 
++	/* First make the page read-only, and only then make it executable to
++	 * prevent it from being W+X in between.
++	 */
++	set_memory_ro((unsigned long)image, 1);
++	/* More checks can be done here to ensure that nothing was changed
++	 * between arch_prepare_bpf_trampoline and set_memory_ro.
++	 */
++	set_memory_x((unsigned long)image, 1);
++
+ 	hook = kzalloc(sizeof(struct bpf_lsm_hook), GFP_KERNEL);
+ 	if (!hook) {
+ 		ret = -ENOMEM;
+-- 
+2.20.1
+
