@@ -1,4 +1,4 @@
-From 1f91fb51ee3647426be6f6415d57d299912126e4 Mon Sep 17 00:00:00 2001
+From 1f076eae046b5ff4e339675302c063e202d459b9 Mon Sep 17 00:00:00 2001
 From: KP Singh <kpsingh@google.com>
 Date: Wed, 8 Jan 2020 00:37:17 +0100
 Subject: [PATCH bpf-next v3 05/10] bpf: lsm: BTF API for LSM hooks
@@ -7,22 +7,23 @@ The BTF API provides information required by the BPF verifier to
 attach eBPF programs to the LSM hooks by using the BTF information of
 two types:
 
-- struct security_hook_heads: This type provides the offset which
-  a new dynamically allocated security hook must be attached to.
+- struct security_hook_heads: This type provides the offset (using the
+  lsm_hook_idx passed by the userspace) to which a new dynamically
+  allocated security hook must be attached to.
 - union security_list_options: This provides the information about the
   function prototype required by the hook.
 
 The type_ids for these types are calculated once during __init as
 bpf_type_by_name_kind does a linear search with string compariason.
-Furthermore, the number of LSM hooks are needed when initializing the
-mutable hooks for the BPF LSM.
+Furthermore, the total number of LSM hooks which can be determined from
+the btf_type_vlen of security_hook_heads is needed (in a subsequent
+patch) to initialize the mutable hooks for the BPF LSM.
 
 When the program is loaded:
 
 - The verifier receives the index of a member in struct
   security_hook_heads to which a program must be attached as
-  prog->aux->lsm_hook_idx. The index is one-based for better
-  verification.
+  prog->aux->lsm_hook_idx.
 - bpf_lsm_type_by_idx is used to determine the func_proto of
   the LSM hook and updates prog->aux->attach_func_proto
 - bpf_lsm_head_by_idx is used to determine the hlist_head to which
@@ -43,7 +44,7 @@ Signed-off-by: KP Singh <kpsingh@google.com>
  create mode 100644 security/bpf/include/bpf_lsm.h
 
 diff --git a/include/linux/bpf_lsm.h b/include/linux/bpf_lsm.h
-index 913fbe72064f..f667b0d324fc 100644
+index 57c20b2cd2f4..5e61c0736001 100644
 --- a/include/linux/bpf_lsm.h
 +++ b/include/linux/bpf_lsm.h
 @@ -19,6 +19,8 @@ extern struct security_hook_heads bpf_lsm_hook_heads;

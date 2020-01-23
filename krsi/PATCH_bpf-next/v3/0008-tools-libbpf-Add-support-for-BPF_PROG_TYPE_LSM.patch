@@ -1,4 +1,4 @@
-From 1a40dce22c00c27b55176deb863227303b9c3265 Mon Sep 17 00:00:00 2001
+From bc7e344aee43ce0008f82ef2d7c8d63e4e64da61 Mon Sep 17 00:00:00 2001
 From: KP Singh <kpsingh@google.com>
 Date: Mon, 30 Dec 2019 14:20:21 +0100
 Subject: [PATCH bpf-next v3 08/10] tools/libbpf: Add support for
@@ -21,7 +21,7 @@ Reviewed-by: Thomas Garnier <thgarnie@google.com>
  5 files changed, 114 insertions(+), 4 deletions(-)
 
 diff --git a/tools/lib/bpf/bpf.c b/tools/lib/bpf/bpf.c
-index ed42b006533c..92430634d032 100644
+index c6dafe563176..60dac1b80e5a 100644
 --- a/tools/lib/bpf/bpf.c
 +++ b/tools/lib/bpf/bpf.c
 @@ -235,7 +235,10 @@ int bpf_load_program_xattr(const struct bpf_load_program_attr *load_attr,
@@ -34,9 +34,9 @@ index ed42b006533c..92430634d032 100644
 +		attr.lsm_hook_idx = load_attr->lsm_hook_idx;
 +	} else if (attr.prog_type == BPF_PROG_TYPE_STRUCT_OPS) {
  		attr.attach_btf_id = load_attr->attach_btf_id;
- 	} else if (attr.prog_type == BPF_PROG_TYPE_TRACING) {
- 		attr.attach_btf_id = load_attr->attach_btf_id;
-@@ -244,6 +247,7 @@ int bpf_load_program_xattr(const struct bpf_load_program_attr *load_attr,
+ 	} else if (attr.prog_type == BPF_PROG_TYPE_TRACING ||
+ 		   attr.prog_type == BPF_PROG_TYPE_EXT) {
+@@ -245,6 +248,7 @@ int bpf_load_program_xattr(const struct bpf_load_program_attr *load_attr,
  		attr.prog_ifindex = load_attr->prog_ifindex;
  		attr.kern_version = load_attr->kern_version;
  	}
@@ -57,7 +57,7 @@ index b976e77316cc..cfd59f7c29a7 100644
  	__u32 prog_btf_fd;
  	__u32 func_info_rec_size;
 diff --git a/tools/lib/bpf/libbpf.c b/tools/lib/bpf/libbpf.c
-index faab96a42141..1ac84a710523 100644
+index ae34b681ae82..69fd8373baeb 100644
 --- a/tools/lib/bpf/libbpf.c
 +++ b/tools/lib/bpf/libbpf.c
 @@ -228,6 +228,7 @@ struct bpf_program {
@@ -89,9 +89,9 @@ index faab96a42141..1ac84a710523 100644
 +		load_attr.lsm_hook_idx = prog->lsm_hook_idx;
 +	} else if (prog->type == BPF_PROG_TYPE_STRUCT_OPS) {
  		load_attr.attach_btf_id = prog->attach_btf_id;
- 	} else if (prog->type == BPF_PROG_TYPE_TRACING) {
- 		load_attr.attach_prog_fd = prog->attach_prog_fd;
-@@ -4844,6 +4850,7 @@ load_program(struct bpf_program *prog, struct bpf_insn *insns, int insns_cnt,
+ 	} else if (prog->type == BPF_PROG_TYPE_TRACING ||
+ 		   prog->type == BPF_PROG_TYPE_EXT) {
+@@ -4845,6 +4851,7 @@ load_program(struct bpf_program *prog, struct bpf_insn *insns, int insns_cnt,
  		load_attr.kern_version = kern_version;
  		load_attr.prog_ifindex = prog->prog_ifindex;
  	}
@@ -99,7 +99,7 @@ index faab96a42141..1ac84a710523 100644
  	/* if .BTF.ext was loaded, kernel supports associated BTF for prog */
  	if (prog->obj->btf_ext)
  		btf_fd = bpf_object__btf_fd(prog->obj);
-@@ -4913,10 +4920,11 @@ load_program(struct bpf_program *prog, struct bpf_insn *insns, int insns_cnt,
+@@ -4914,10 +4921,11 @@ load_program(struct bpf_program *prog, struct bpf_insn *insns, int insns_cnt,
  }
  
  static int libbpf_find_attach_btf_id(struct bpf_program *prog);
@@ -110,9 +110,9 @@ index faab96a42141..1ac84a710523 100644
 -	int err = 0, fd, i, btf_id;
 +	int err = 0, fd, i, btf_id, idx;
  
- 	if (prog->type == BPF_PROG_TYPE_TRACING) {
- 		btf_id = libbpf_find_attach_btf_id(prog);
-@@ -4925,6 +4933,13 @@ int bpf_program__load(struct bpf_program *prog, char *license, __u32 kern_ver)
+ 	if (prog->type == BPF_PROG_TYPE_TRACING ||
+ 	    prog->type == BPF_PROG_TYPE_EXT) {
+@@ -4927,6 +4935,13 @@ int bpf_program__load(struct bpf_program *prog, char *license, __u32 kern_ver)
  		prog->attach_btf_id = btf_id;
  	}
  
@@ -126,7 +126,7 @@ index faab96a42141..1ac84a710523 100644
  	if (prog->instances.nr < 0 || !prog->instances.fds) {
  		if (prog->preprocessor) {
  			pr_warn("Internal error: can't load program '%s'\n",
-@@ -5082,6 +5097,8 @@ __bpf_object__open(const char *path, const void *obj_buf, size_t obj_buf_sz,
+@@ -5084,6 +5099,8 @@ __bpf_object__open(const char *path, const void *obj_buf, size_t obj_buf_sz,
  		if (prog->type != BPF_PROG_TYPE_UNSPEC)
  			continue;
  
@@ -135,7 +135,7 @@ index faab96a42141..1ac84a710523 100644
  		err = libbpf_prog_type_by_name(prog->section_name, &prog_type,
  					       &attach_type);
  		if (err == -ESRCH)
-@@ -6157,6 +6174,7 @@ bool bpf_program__is_##NAME(const struct bpf_program *prog)	\
+@@ -6160,6 +6177,7 @@ bool bpf_program__is_##NAME(const struct bpf_program *prog)	\
  }								\
  
  BPF_PROG_TYPE_FNS(socket_filter, BPF_PROG_TYPE_SOCKET_FILTER);
@@ -143,7 +143,7 @@ index faab96a42141..1ac84a710523 100644
  BPF_PROG_TYPE_FNS(kprobe, BPF_PROG_TYPE_KPROBE);
  BPF_PROG_TYPE_FNS(sched_cls, BPF_PROG_TYPE_SCHED_CLS);
  BPF_PROG_TYPE_FNS(sched_act, BPF_PROG_TYPE_SCHED_ACT);
-@@ -6222,6 +6240,8 @@ static struct bpf_link *attach_raw_tp(const struct bpf_sec_def *sec,
+@@ -6226,6 +6244,8 @@ static struct bpf_link *attach_raw_tp(const struct bpf_sec_def *sec,
  				      struct bpf_program *prog);
  static struct bpf_link *attach_trace(const struct bpf_sec_def *sec,
  				     struct bpf_program *prog);
@@ -152,8 +152,8 @@ index faab96a42141..1ac84a710523 100644
  
  struct bpf_sec_def {
  	const char *sec;
-@@ -6265,6 +6285,9 @@ static const struct bpf_sec_def section_defs[] = {
- 		.expected_attach_type = BPF_TRACE_FEXIT,
+@@ -6272,6 +6292,9 @@ static const struct bpf_sec_def section_defs[] = {
+ 	SEC_DEF("freplace/", EXT,
  		.is_attach_btf = true,
  		.attach_fn = attach_trace),
 +	SEC_DEF("lsm/", LSM,
@@ -162,7 +162,7 @@ index faab96a42141..1ac84a710523 100644
  	BPF_PROG_SEC("xdp",			BPF_PROG_TYPE_XDP),
  	BPF_PROG_SEC("perf_event",		BPF_PROG_TYPE_PERF_EVENT),
  	BPF_PROG_SEC("lwt_in",			BPF_PROG_TYPE_LWT_IN),
-@@ -6526,6 +6549,44 @@ static int bpf_object__collect_struct_ops_map_reloc(struct bpf_object *obj,
+@@ -6533,6 +6556,44 @@ static int bpf_object__collect_struct_ops_map_reloc(struct bpf_object *obj,
  	return -EINVAL;
  }
  
@@ -171,9 +171,9 @@ index faab96a42141..1ac84a710523 100644
 +	struct btf *btf = prog->obj->btf_vmlinux;
 +	const char *name = prog->section_name;
 +	const struct bpf_sec_def *sec_def;
-+	const struct btf_type *hl_type;
++	const struct btf_type *t;
 +	struct btf_member *m;
-+	__s32 hl_id;
++	__s32 type_id;
 +	int i;
 +
 +	sec_def = find_sec_def(name);
@@ -182,20 +182,20 @@ index faab96a42141..1ac84a710523 100644
 +
 +	name += sec_def->len;
 +
-+	hl_id = btf__find_by_name_kind(btf, "security_hook_heads",
++	type_id = btf__find_by_name_kind(btf, "security_hook_heads",
 +				       BTF_KIND_STRUCT);
-+	if (hl_id < 0) {
++	if (type_id < 0) {
 +		pr_warn("security_hook_heads not found in vmlinux BTF\n");
-+		return hl_id;
++		return type_id;
 +	}
 +
-+	hl_type = btf__type_by_id(btf, hl_id);
-+	if (!hl_type) {
-+		pr_warn("Can't find type for security_hook_heads: %u\n", hl_id);
++	t = btf__type_by_id(btf, type_id);
++	if (!t) {
++		pr_warn("Can't find type for security_hook_heads: %u\n", type_id);
 +		return -ESRCH;
 +	}
 +
-+	for (m = btf_members(hl_type), i = 0; i < btf_vlen(hl_type); i++, m++) {
++	for (m = btf_members(t), i = 0; i < btf_vlen(t); i++, m++) {
 +		if (!strcmp(btf__name_by_offset(btf, m->name_off), name))
 +			return i;
 +	}
@@ -207,7 +207,7 @@ index faab96a42141..1ac84a710523 100644
  #define BTF_TRACE_PREFIX "btf_trace_"
  #define BTF_MAX_NAME_SIZE 128
  
-@@ -7365,6 +7426,43 @@ static struct bpf_link *attach_trace(const struct bpf_sec_def *sec,
+@@ -7372,6 +7433,43 @@ static struct bpf_link *attach_trace(const struct bpf_sec_def *sec,
  	return bpf_program__attach_trace(prog);
  }
  
@@ -252,7 +252,7 @@ index faab96a42141..1ac84a710523 100644
  {
  	const struct bpf_sec_def *sec_def;
 diff --git a/tools/lib/bpf/libbpf.h b/tools/lib/bpf/libbpf.h
-index 01639f9a1062..1ce51ded4da8 100644
+index 2a5e3b087002..ef09ca980758 100644
 --- a/tools/lib/bpf/libbpf.h
 +++ b/tools/lib/bpf/libbpf.h
 @@ -239,6 +239,8 @@ bpf_program__attach_raw_tracepoint(struct bpf_program *prog,
@@ -272,7 +272,7 @@ index 01639f9a1062..1ce51ded4da8 100644
  LIBBPF_API int bpf_program__set_sched_cls(struct bpf_program *prog);
  LIBBPF_API int bpf_program__set_sched_act(struct bpf_program *prog);
  LIBBPF_API int bpf_program__set_xdp(struct bpf_program *prog);
-@@ -333,6 +336,7 @@ LIBBPF_API bool bpf_program__is_socket_filter(const struct bpf_program *prog);
+@@ -334,6 +337,7 @@ LIBBPF_API bool bpf_program__is_socket_filter(const struct bpf_program *prog);
  LIBBPF_API bool bpf_program__is_tracepoint(const struct bpf_program *prog);
  LIBBPF_API bool bpf_program__is_raw_tracepoint(const struct bpf_program *prog);
  LIBBPF_API bool bpf_program__is_kprobe(const struct bpf_program *prog);
@@ -281,17 +281,19 @@ index 01639f9a1062..1ce51ded4da8 100644
  LIBBPF_API bool bpf_program__is_sched_act(const struct bpf_program *prog);
  LIBBPF_API bool bpf_program__is_xdp(const struct bpf_program *prog);
 diff --git a/tools/lib/bpf/libbpf.map b/tools/lib/bpf/libbpf.map
-index 64ec71ba41f1..e153d1a8cef6 100644
+index b035122142bb..8df332a528a0 100644
 --- a/tools/lib/bpf/libbpf.map
 +++ b/tools/lib/bpf/libbpf.map
-@@ -227,8 +227,11 @@ LIBBPF_0.0.7 {
+@@ -227,10 +227,13 @@ LIBBPF_0.0.7 {
  		bpf_probe_large_insn_limit;
  		bpf_prog_attach_xattr;
  		bpf_program__attach;
 +		bpf_program__attach_lsm;
  		bpf_program__name;
+ 		bpf_program__is_extension;
 +		bpf_program__is_lsm;
  		bpf_program__is_struct_ops;
+ 		bpf_program__set_extension;
 +		bpf_program__set_lsm;
  		bpf_program__set_struct_ops;
  		btf__align_of;

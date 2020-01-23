@@ -1,11 +1,11 @@
-From dd84673db0c7318983e86136b6f226d3807fa25b Mon Sep 17 00:00:00 2001
+From c479225f8f531f6ef0360b8b78c5fa6c00960fd6 Mon Sep 17 00:00:00 2001
 From: KP Singh <kpsingh@google.com>
 Date: Mon, 30 Dec 2019 12:37:18 +0100
 Subject: [PATCH bpf-next v3 01/10] bpf: btf: Add btf_type_by_name_kind
 
-- The LSM code does the combination of
-  btf_find_by_name_kind and btf_type_by_id a couple of times to figure
-  out the BTF type for security_hook_heads and security_list_options.
+- The LSM code does the combination of btf_find_by_name_kind and
+  btf_type_by_id a couple of times to figure out the BTF type for
+  security_hook_heads and security_list_options.
 - Add an extern for btf_vmlinux in btf.h
 
 Signed-off-by: KP Singh <kpsingh@google.com>
@@ -14,11 +14,11 @@ Reviewed-by: Florent Revest <revest@google.com>
 Reviewed-by: Thomas Garnier <thgarnie@google.com>
 ---
  include/linux/btf.h |  3 +++
- kernel/bpf/btf.c    | 13 +++++++++++++
- 2 files changed, 16 insertions(+)
+ kernel/bpf/btf.c    | 12 ++++++++++++
+ 2 files changed, 15 insertions(+)
 
 diff --git a/include/linux/btf.h b/include/linux/btf.h
-index 881e9b76ef49..726c5dc0c28b 100644
+index 5c1ea99b480f..d4e859f90a39 100644
 --- a/include/linux/btf.h
 +++ b/include/linux/btf.h
 @@ -15,6 +15,7 @@ struct btf_type;
@@ -39,17 +39,16 @@ index 881e9b76ef49..726c5dc0c28b 100644
  #define for_each_member(i, struct_type, member)			\
  	for (i = 0, member = btf_type_member(struct_type);	\
 diff --git a/kernel/bpf/btf.c b/kernel/bpf/btf.c
-index 832b5d7fd892..629abcdd7661 100644
+index 32963b6d5a9c..ea53c16802cb 100644
 --- a/kernel/bpf/btf.c
 +++ b/kernel/bpf/btf.c
-@@ -436,6 +436,19 @@ const struct btf_type *btf_type_resolve_func_ptr(const struct btf *btf,
+@@ -441,6 +441,18 @@ const struct btf_type *btf_type_resolve_func_ptr(const struct btf *btf,
  	return NULL;
  }
  
 +const struct btf_type *btf_type_by_name_kind(
 +	struct btf *btf, const char *name, u8 kind)
 +{
-+	const struct btf_type *t;
 +	s32 type_id;
 +
 +	type_id = btf_find_by_name_kind(btf, name, kind);

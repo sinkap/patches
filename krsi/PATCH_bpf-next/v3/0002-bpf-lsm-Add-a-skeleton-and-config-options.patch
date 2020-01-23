@@ -1,20 +1,25 @@
-From 1578a2faa48a523ba2f9fa4cc6974fa8f9acb75a Mon Sep 17 00:00:00 2001
+From e53a236473b5192015ebe1fcd3af86338ad60bbe Mon Sep 17 00:00:00 2001
 From: KP Singh <kpsingh@google.com>
 Date: Tue, 7 Jan 2020 23:48:14 +0100
 Subject: [PATCH bpf-next v3 02/10] bpf: lsm: Add a skeleton and config options
 
-The LSM can be enabled by CONFIG_SECURITY_BPF.
-Without CONFIG_SECURITY_BPF_ENFORCE, the LSM will run the
-attached eBPF programs but not enforce MAC policy based
-on the return value of the attached programs.
+The LSM can be enabled by CONFIG_SECURITY_BPF.  Without
+CONFIG_SECURITY_BPF_ENFORCE, the LSM will run the attached eBPF programs
+but not enforce MAC policy based on the return value of the attached
+programs.
 
-The BPF LSM is added with LSM_ORDER_LAST. The LSM has statically defined
-hooks defined at init with __lsm_ro_after_init and mutable hooks to
-a separate security_hook_heads (introduced in a subsequent patch).
+The BPF LSM has two kinds of hooks:
 
-LSM_ORDER_LAST represents the behaviour of this LSM correctly (i.e all
-its hooks are executed at the end irrespective of the position of
-"bpf" in the list of LSMs).
+- Statically defined hooks defined at init with __lsm_ro_after_init
+  which are attached to the security_hook_heads defined in
+  security/security.c similar to other LSMs.
+- Mutable hooks that are attached to a separate security_hook_heads
+  maintained by the BPF LSM (introduced in a subsequent patch).
+
+The mutable hooks are always executed after all the static hooks
+(irrespective of the position of "bpf" in the list of LSMs). Therefore,
+the newly introduced LSM_ORDER_LAST represents the behaviour of this LSM
+correctly
 
 Signed-off-by: KP Singh <kpsingh@google.com>
 Reviewed-by: Brendan Jackman <jackmanb@google.com>
@@ -35,7 +40,7 @@ Reviewed-by: Thomas Garnier <thgarnie@google.com>
  create mode 100644 security/bpf/lsm.c
 
 diff --git a/MAINTAINERS b/MAINTAINERS
-index 66a2e5e07117..0941f478cfa5 100644
+index 702382b89c37..e2b7f76a1a70 100644
 --- a/MAINTAINERS
 +++ b/MAINTAINERS
 @@ -3203,6 +3203,13 @@ S:	Supported
@@ -154,7 +159,7 @@ index 000000000000..26a0ab6f99b7
 +obj-$(CONFIG_SECURITY_BPF) := lsm.o
 diff --git a/security/bpf/lsm.c b/security/bpf/lsm.c
 new file mode 100644
-index 000000000000..51bddc025d4e
+index 000000000000..dc9ac03c7aa0
 --- /dev/null
 +++ b/security/bpf/lsm.c
 @@ -0,0 +1,26 @@
@@ -167,7 +172,7 @@ index 000000000000..51bddc025d4e
 +#include <linux/lsm_hooks.h>
 +
 +/* This is only for internal hooks, always statically shipped as part of the
-+ * BPF LSM. Statically defined hooks are appeneded to the security_hook_heads
++ * BPF LSM. Statically defined hooks are appended to the security_hook_heads
 + * which is common for LSMs and R/O after init.
 + */
 +static struct security_hook_list bpf_lsm_hooks[] __lsm_ro_after_init = {};

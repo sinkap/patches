@@ -1,14 +1,13 @@
-From 2e8d7d6a2f0ebf265994d12fc4dfed59179d502d Mon Sep 17 00:00:00 2001
+From 58c8911bd383e91fa9d924f30eaa966eb2ab62d5 Mon Sep 17 00:00:00 2001
 From: KP Singh <kpsingh@google.com>
 Date: Wed, 8 Jan 2020 23:34:28 +0100
 Subject: [PATCH bpf-next v3 06/10] bpf: lsm: Implement attach, detach and
  execution
 
 JITed BPF programs are used by the BPF LSM as dynamically allocated
-security hooks. arch_bpf_prepare_trampoline handles the
-arch_bpf_prepare_trampoline generates code to handle conversion of the
-signature of the hook to the BPF context and allows the BPF program to
-be called directly as a C function.
+security hooks. arch_bpf_prepare_trampoline generates code to handle
+conversion of the signature of the hook to the BPF context and allows
+the BPF program to be called directly as a C function.
 
 The BPF_PROG_TYPE_LSM programs must have a GPL compatible license and
 the following permissions are required to attach a program to a
@@ -18,7 +17,7 @@ hook:
 - CAP_MAC_ADMIN to attach it (i.e. to update the security policy)
 
 When the program is loaded (BPF_PROG_LOAD), the verifier receives the
-index (one-based) of the member in the security_hook_heads struct in the
+index of the member in the security_hook_heads struct in the
 prog->aux->lsm_hook_idx and uses the BTF API provided by the LSM to:
 
 - Populate the name of the hook in prog->aux->attach_func_name and
@@ -26,12 +25,6 @@ prog->aux->lsm_hook_idx and uses the BTF API provided by the LSM to:
 - Verify if the offset is valid for a type struct hlist_head.
 - The program is verified for accesses based on the attach_func_proto
   similar to raw_tp BPF programs.
-
-A one-based index is used to make it possible to validate input provided
-by user-space since 0 is a valid LSM hook index and also a default
-value. We don't want this validation to happen too late in the verifier
-where the signature of the BPF program may or may-not match that of the
-first LSM hook.
 
 When an attachment (BPF_PROG_ATTACH) is requested:
 
@@ -51,20 +44,20 @@ Reviewed-by: Thomas Garnier <thgarnie@google.com>
  include/linux/bpf_lsm.h        |  15 +++
  include/uapi/linux/bpf.h       |   4 +
  kernel/bpf/syscall.c           |  47 +++++++-
- kernel/bpf/verifier.c          |  74 ++++++++++--
+ kernel/bpf/verifier.c          |  73 ++++++++++--
  security/bpf/Kconfig           |   1 +
- security/bpf/hooks.c           | 211 +++++++++++++++++++++++++++++++++
+ security/bpf/hooks.c           | 201 +++++++++++++++++++++++++++++++++
  security/bpf/include/bpf_lsm.h |  49 ++++++++
- security/bpf/lsm.c             |  19 +++
+ security/bpf/lsm.c             |  19 ++++
  security/bpf/ops.c             |   2 +
  tools/include/uapi/linux/bpf.h |   4 +
- 11 files changed, 419 insertions(+), 11 deletions(-)
+ 11 files changed, 408 insertions(+), 11 deletions(-)
 
 diff --git a/include/linux/bpf.h b/include/linux/bpf.h
-index 8e3b8f4ad183..440368c65b98 100644
+index a9687861fd7e..6d6653a375f6 100644
 --- a/include/linux/bpf.h
 +++ b/include/linux/bpf.h
-@@ -608,6 +608,10 @@ struct bpf_prog_aux {
+@@ -614,6 +614,10 @@ struct bpf_prog_aux {
  	u32 func_cnt; /* used by non-func prog as the number of func progs */
  	u32 func_idx; /* 0 for non-func prog, the index in func array for func prog */
  	u32 attach_btf_id; /* in-kernel BTF type id to attach to */
@@ -76,7 +69,7 @@ index 8e3b8f4ad183..440368c65b98 100644
  	bool verifier_zext; /* Zero extensions has been inserted by verifier. */
  	bool offload_requested;
 diff --git a/include/linux/bpf_lsm.h b/include/linux/bpf_lsm.h
-index f667b0d324fc..decfedbc996d 100644
+index 5e61c0736001..b6daa0875c8d 100644
 --- a/include/linux/bpf_lsm.h
 +++ b/include/linux/bpf_lsm.h
 @@ -19,8 +19,11 @@ extern struct security_hook_heads bpf_lsm_hook_heads;
@@ -118,10 +111,10 @@ index f667b0d324fc..decfedbc996d 100644
  #endif /* CONFIG_SECURITY_BPF */
  
 diff --git a/include/uapi/linux/bpf.h b/include/uapi/linux/bpf.h
-index 2406e7752245..85a513101cc9 100644
+index 2f1e24a8c4a4..a3206de23db9 100644
 --- a/include/uapi/linux/bpf.h
 +++ b/include/uapi/linux/bpf.h
-@@ -469,6 +469,10 @@ union bpf_attr {
+@@ -470,6 +470,10 @@ union bpf_attr {
  		__u32		line_info_cnt;	/* number of bpf_line_info records */
  		__u32		attach_btf_id;	/* in-kernel BTF type id to attach to */
  		__u32		attach_prog_fd; /* 0 to attach to vmlinux */
@@ -133,7 +126,7 @@ index 2406e7752245..85a513101cc9 100644
  
  	struct { /* anonymous struct used by BPF_OBJ_* commands */
 diff --git a/kernel/bpf/syscall.c b/kernel/bpf/syscall.c
-index 137133ece2df..d69e00cf54ca 100644
+index eab4a36ee889..851ca97120ac 100644
 --- a/kernel/bpf/syscall.c
 +++ b/kernel/bpf/syscall.c
 @@ -4,6 +4,7 @@
@@ -144,7 +137,7 @@ index 137133ece2df..d69e00cf54ca 100644
  #include <linux/btf.h>
  #include <linux/syscalls.h>
  #include <linux/slab.h>
-@@ -1979,7 +1980,7 @@ bpf_prog_load_check_attach(enum bpf_prog_type prog_type,
+@@ -1993,7 +1994,7 @@ bpf_prog_load_check_attach(enum bpf_prog_type prog_type,
  }
  
  /* last field in 'union bpf_attr' used by this command */
@@ -153,7 +146,7 @@ index 137133ece2df..d69e00cf54ca 100644
  
  static int bpf_prog_load(union bpf_attr *attr, union bpf_attr __user *uattr)
  {
-@@ -2033,6 +2034,10 @@ static int bpf_prog_load(union bpf_attr *attr, union bpf_attr __user *uattr)
+@@ -2047,6 +2048,10 @@ static int bpf_prog_load(union bpf_attr *attr, union bpf_attr __user *uattr)
  
  	prog->expected_attach_type = attr->expected_attach_type;
  	prog->aux->attach_btf_id = attr->attach_btf_id;
@@ -164,7 +157,7 @@ index 137133ece2df..d69e00cf54ca 100644
  	if (attr->attach_prog_fd) {
  		struct bpf_prog *tgt_prog;
  
-@@ -2198,6 +2203,44 @@ static int bpf_tracing_prog_attach(struct bpf_prog *prog)
+@@ -2213,6 +2218,44 @@ static int bpf_tracing_prog_attach(struct bpf_prog *prog)
  	return err;
  }
  
@@ -209,17 +202,17 @@ index 137133ece2df..d69e00cf54ca 100644
  struct bpf_raw_tracepoint {
  	struct bpf_raw_event_map *btp;
  	struct bpf_prog *prog;
-@@ -2414,7 +2457,7 @@ static int bpf_prog_attach(const union bpf_attr *attr)
+@@ -2431,7 +2474,7 @@ static int bpf_prog_attach(const union bpf_attr *attr)
  		ret = lirc_prog_attach(attr, prog);
  		break;
  	case BPF_PROG_TYPE_LSM:
--		ret = -EINVAL;
+-		ret = -EOPNOTSUPP;
 +		ret = bpf_lsm_prog_attach(prog);
  		break;
  	case BPF_PROG_TYPE_FLOW_DISSECTOR:
  		ret = skb_flow_dissector_bpf_prog_attach(attr, prog);
 diff --git a/kernel/bpf/verifier.c b/kernel/bpf/verifier.c
-index ca17dccc17ba..a58b25a89d1b 100644
+index 1cc945daa9c8..1a4013c68afa 100644
 --- a/kernel/bpf/verifier.c
 +++ b/kernel/bpf/verifier.c
 @@ -19,6 +19,7 @@
@@ -230,7 +223,7 @@ index ca17dccc17ba..a58b25a89d1b 100644
  
  #include "disasm.h"
  
-@@ -6393,8 +6394,9 @@ static int check_return_code(struct bpf_verifier_env *env)
+@@ -6405,8 +6406,9 @@ static int check_return_code(struct bpf_verifier_env *env)
  	struct tnum range = tnum_range(0, 1);
  	int err;
  
@@ -242,7 +235,7 @@ index ca17dccc17ba..a58b25a89d1b 100644
  	    !prog->aux->attach_func_proto->type)
  		return 0;
  
-@@ -9734,7 +9736,51 @@ static int check_struct_ops_btf_id(struct bpf_verifier_env *env)
+@@ -9775,7 +9777,49 @@ static int check_struct_ops_btf_id(struct bpf_verifier_env *env)
  	return 0;
  }
  
@@ -250,9 +243,7 @@ index ca17dccc17ba..a58b25a89d1b 100644
 +/* BPF_PROG_TYPE_LSM programs pass the member index of the LSM hook in the
 + * security_hook_heads as the lsm_hook_idx. The verifier determines the
 + * name and the prototype for the LSM hook using the information in
-+ * security_list_options, validates if the offset is a valid hlist_head, and
-+ * updates the attach_btf_id to the byte offset in the security_hook_heads
-+ * struct.
++ * security_list_options and validates if the offset is a valid hlist_head.
 + */
 +static inline int check_attach_btf_id_lsm(struct bpf_verifier_env *env)
 +{
@@ -294,21 +285,21 @@ index ca17dccc17ba..a58b25a89d1b 100644
 +static int check_attach_btf_id_tracing(struct bpf_verifier_env *env)
  {
  	struct bpf_prog *prog = env->prog;
- 	struct bpf_prog *tgt_prog = prog->aux->linked_prog;
-@@ -9749,12 +9795,6 @@ static int check_attach_btf_id(struct bpf_verifier_env *env)
+ 	bool prog_extension = prog->type == BPF_PROG_TYPE_EXT;
+@@ -9791,12 +9835,6 @@ static int check_attach_btf_id(struct bpf_verifier_env *env)
  	long addr;
  	u64 key;
  
 -	if (prog->type == BPF_PROG_TYPE_STRUCT_OPS)
 -		return check_struct_ops_btf_id(env);
 -
--	if (prog->type != BPF_PROG_TYPE_TRACING)
+-	if (prog->type != BPF_PROG_TYPE_TRACING && !prog_extension)
 -		return 0;
 -
  	if (!btf_id) {
  		verbose(env, "Tracing programs must provide btf_id\n");
  		return -EINVAL;
-@@ -9895,6 +9935,22 @@ static int check_attach_btf_id(struct bpf_verifier_env *env)
+@@ -9981,6 +10019,23 @@ static int check_attach_btf_id(struct bpf_verifier_env *env)
  	}
  }
  
@@ -318,6 +309,7 @@ index ca17dccc17ba..a58b25a89d1b 100644
 +
 +	switch (prog->type) {
 +	case BPF_PROG_TYPE_TRACING:
++	case BPF_PROG_TYPE_EXT:
 +		return check_attach_btf_id_tracing(env);
 +	case BPF_PROG_TYPE_STRUCT_OPS:
 +		return check_struct_ops_btf_id(env);
@@ -344,7 +336,7 @@ index 9438d899b618..a915c549f4b8 100644
  	  This enables instrumentation of the security hooks with
  	  eBPF programs.
 diff --git a/security/bpf/hooks.c b/security/bpf/hooks.c
-index c61100abc657..10cc1c8f87e5 100644
+index c61100abc657..d2deffb30004 100644
 --- a/security/bpf/hooks.c
 +++ b/security/bpf/hooks.c
 @@ -6,11 +6,14 @@
@@ -390,7 +382,7 @@ index c61100abc657..10cc1c8f87e5 100644
  /* Find the BTF representation of the security_hook_heads member for a member
   * with a given index in struct security_hook_heads.
   */
-@@ -93,3 +117,190 @@ const struct btf_type *bpf_lsm_type_by_idx(struct btf *btf, u32 idx)
+@@ -93,3 +117,180 @@ const struct btf_type *bpf_lsm_type_by_idx(struct btf *btf, u32 idx)
  
  	return ERR_PTR(-ESRCH);
  }
@@ -399,30 +391,20 @@ index c61100abc657..10cc1c8f87e5 100644
 +				   const char *name)
 +{
 +	const struct btf_member *member;
-+	void *addr = NULL;
 +	s32 i;
 +
-+	for_each_member(i, bpf_lsm_info.btf_hook_types, member) {
++	for_each_member(i, bpf_lsm_info.btf_hook_types, member)
 +		if (!strncmp(btf_name_by_offset(btf_vmlinux, member->name_off),
-+				name, strlen(name) + 1)) {
-+			/* There should be only one member with the same name
-+			 * as the LSM hook.
-+			 */
-+			if (WARN_ON(addr))
-+				return ERR_PTR(-EINVAL);
-+			addr = (void *)&s->hook + member->offset / 8;
-+		}
-+	}
++			     name, strlen(name) + 1))
++			return (void *)&s->hook + member->offset / 8;
 +
-+	if (!addr)
-+		return ERR_PTR(-ENOENT);
-+	return addr;
++	return ERR_PTR(-ESRCH);
 +}
 +
 +static struct bpf_lsm_list *bpf_lsm_list_lookup(struct bpf_prog *prog)
 +{
-+	u32 idx = prog->aux->lsm_hook_idx;
 +	struct bpf_verifier_log bpf_log = {};
++	u32 idx = prog->aux->lsm_hook_idx;
 +	const struct btf_member *head;
 +	struct bpf_lsm_list *list;
 +	int ret = 0;
@@ -457,8 +439,8 @@ index c61100abc657..10cc1c8f87e5 100644
 +	return list;
 +}
 +
-+static struct bpf_lsm_hook *bpf_lsm_hook_alloc(
-+	struct bpf_lsm_list *list, struct bpf_prog *prog)
++static struct bpf_lsm_hook *bpf_lsm_hook_alloc(struct bpf_lsm_list *list,
++					       struct bpf_prog *prog)
 +{
 +	struct bpf_lsm_hook *hook;
 +	void *image;
@@ -582,7 +564,7 @@ index c61100abc657..10cc1c8f87e5 100644
 +	return 0;
 +}
 diff --git a/security/bpf/include/bpf_lsm.h b/security/bpf/include/bpf_lsm.h
-index f142596d97bd..7c63c3ae3edf 100644
+index f142596d97bd..4c51ce4d29e7 100644
 --- a/security/bpf/include/bpf_lsm.h
 +++ b/security/bpf/include/bpf_lsm.h
 @@ -4,9 +4,50 @@
@@ -644,8 +626,8 @@ index f142596d97bd..7c63c3ae3edf 100644
 +	 */
 +	bool initialized;
 +	/* The hook_lists is allocated during __init and mutexes for each
-+	 * allocated on __init, the remaining initialization happens when a
-+	 * BPF program is attached to the list.
++	 * bpf_lsm_list are initialized on __init, the remaining initialization
++	 * happens when a BPF program is attached to the list.
 +	 */
 +	struct bpf_lsm_list *hook_lists;
  };
@@ -714,10 +696,10 @@ index 81c2bd9c0495..9a26633ac6f3 100644
 +	.is_valid_access = btf_ctx_access,
  };
 diff --git a/tools/include/uapi/linux/bpf.h b/tools/include/uapi/linux/bpf.h
-index 2406e7752245..85a513101cc9 100644
+index 2f1e24a8c4a4..a3206de23db9 100644
 --- a/tools/include/uapi/linux/bpf.h
 +++ b/tools/include/uapi/linux/bpf.h
-@@ -469,6 +469,10 @@ union bpf_attr {
+@@ -470,6 +470,10 @@ union bpf_attr {
  		__u32		line_info_cnt;	/* number of bpf_line_info records */
  		__u32		attach_btf_id;	/* in-kernel BTF type id to attach to */
  		__u32		attach_prog_fd; /* 0 to attach to vmlinux */

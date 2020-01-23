@@ -1,4 +1,4 @@
-From c2dff4817b70603fca8f2c7afa9935a3f6f942c7 Mon Sep 17 00:00:00 2001
+From 71f186bcfe90ac215976af6dd93ed393ebb7e881 Mon Sep 17 00:00:00 2001
 From: KP Singh <kpsingh@google.com>
 Date: Thu, 9 Jan 2020 00:09:21 +0100
 Subject: [PATCH bpf-next v3 04/10] bpf: lsm: Add mutable hooks list for the
@@ -28,14 +28,14 @@ Signed-off-by: KP Singh <kpsingh@google.com>
  security/bpf/Kconfig    |  1 +
  security/bpf/Makefile   |  2 +-
  security/bpf/hooks.c    | 20 ++++++++++++
- security/bpf/lsm.c      |  9 +++++-
+ security/bpf/lsm.c      |  7 ++++
  security/security.c     | 25 +++++++-------
- 7 files changed, 117 insertions(+), 13 deletions(-)
+ 7 files changed, 116 insertions(+), 12 deletions(-)
  create mode 100644 include/linux/bpf_lsm.h
  create mode 100644 security/bpf/hooks.c
 
 diff --git a/MAINTAINERS b/MAINTAINERS
-index 0941f478cfa5..02d7e05e9b75 100644
+index e2b7f76a1a70..c606b3d89992 100644
 --- a/MAINTAINERS
 +++ b/MAINTAINERS
 @@ -3209,6 +3209,7 @@ L:	linux-security-module@vger.kernel.org
@@ -48,7 +48,7 @@ index 0941f478cfa5..02d7e05e9b75 100644
  M:	Michael Chan <michael.chan@broadcom.com>
 diff --git a/include/linux/bpf_lsm.h b/include/linux/bpf_lsm.h
 new file mode 100644
-index 000000000000..913fbe72064f
+index 000000000000..57c20b2cd2f4
 --- /dev/null
 +++ b/include/linux/bpf_lsm.h
 @@ -0,0 +1,72 @@
@@ -67,7 +67,7 @@ index 000000000000..913fbe72064f
 +#ifdef CONFIG_SECURITY_BPF
 +
 +/* Mutable hooks defined at runtime and executed after all the statically
-+ * define LSM hooks.
++ * defined LSM hooks.
 + */
 +extern struct security_hook_heads bpf_lsm_hook_heads;
 +
@@ -173,10 +173,10 @@ index 000000000000..b123d9cb4cd4
 +	return srcu_read_unlock(&security_hook_srcu, idx);
 +}
 diff --git a/security/bpf/lsm.c b/security/bpf/lsm.c
-index 51bddc025d4e..a25a068e1781 100644
+index dc9ac03c7aa0..a25a068e1781 100644
 --- a/security/bpf/lsm.c
 +++ b/security/bpf/lsm.c
-@@ -4,14 +4,21 @@
+@@ -4,6 +4,7 @@
   * Copyright 2019 Google LLC.
   */
  
@@ -184,9 +184,7 @@ index 51bddc025d4e..a25a068e1781 100644
  #include <linux/lsm_hooks.h>
  
  /* This is only for internal hooks, always statically shipped as part of the
-- * BPF LSM. Statically defined hooks are appeneded to the security_hook_heads
-+ * BPF LSM. Statically defined hooks are appended to the security_hook_heads
-  * which is common for LSMs and R/O after init.
+@@ -12,6 +13,12 @@
   */
  static struct security_hook_list bpf_lsm_hooks[] __lsm_ro_after_init = {};
  

@@ -1,4 +1,4 @@
-From 0035eb12836877eb75eb47294e5262aa73be3e5e Mon Sep 17 00:00:00 2001
+From cf28b283086180e3dd40d146fb32b62d2f2b1e32 Mon Sep 17 00:00:00 2001
 From: KP Singh <kpsingh@google.com>
 Date: Wed, 8 Jan 2020 22:27:08 +0100
 Subject: [PATCH bpf-next v3 07/10] bpf: lsm: Make the allocated callback RO+X
@@ -20,10 +20,10 @@ Reviewed-by: Thomas Garnier <thgarnie@google.com>
  1 file changed, 9 insertions(+)
 
 diff --git a/security/bpf/hooks.c b/security/bpf/hooks.c
-index 10cc1c8f87e5..d28e3f8dd176 100644
+index d2deffb30004..5fde64359ad2 100644
 --- a/security/bpf/hooks.c
 +++ b/security/bpf/hooks.c
-@@ -200,6 +200,15 @@ static struct bpf_lsm_hook *bpf_lsm_hook_alloc(
+@@ -190,6 +190,15 @@ static struct bpf_lsm_hook *bpf_lsm_hook_alloc(struct bpf_lsm_list *list,
  		goto error;
  	}
  
