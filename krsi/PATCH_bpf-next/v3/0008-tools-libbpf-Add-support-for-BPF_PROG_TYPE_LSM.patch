@@ -1,4 +1,4 @@
-From bc7e344aee43ce0008f82ef2d7c8d63e4e64da61 Mon Sep 17 00:00:00 2001
+From cb5ba6d7f7adc55683b98b2dc3bf81b4e9a0897d Mon Sep 17 00:00:00 2001
 From: KP Singh <kpsingh@google.com>
 Date: Mon, 30 Dec 2019 14:20:21 +0100
 Subject: [PATCH bpf-next v3 08/10] tools/libbpf: Add support for
@@ -6,7 +6,7 @@ Subject: [PATCH bpf-next v3 08/10] tools/libbpf: Add support for
 
 * Add functionality in libbpf to attach eBPF program to LSM hooks
 * Lookup the index of the LSM hook in security_hook_heads and pass it in
-  attr->lsm_hook_index
+  attr->lsm_hook_idx
 
 Signed-off-by: KP Singh <kpsingh@google.com>
 Reviewed-by: Brendan Jackman <jackmanb@google.com>
@@ -57,7 +57,7 @@ index b976e77316cc..cfd59f7c29a7 100644
  	__u32 prog_btf_fd;
  	__u32 func_info_rec_size;
 diff --git a/tools/lib/bpf/libbpf.c b/tools/lib/bpf/libbpf.c
-index ae34b681ae82..69fd8373baeb 100644
+index ae34b681ae82..1ecbf6c78b97 100644
 --- a/tools/lib/bpf/libbpf.c
 +++ b/tools/lib/bpf/libbpf.c
 @@ -228,6 +228,7 @@ struct bpf_program {
@@ -183,7 +183,7 @@ index ae34b681ae82..69fd8373baeb 100644
 +	name += sec_def->len;
 +
 +	type_id = btf__find_by_name_kind(btf, "security_hook_heads",
-+				       BTF_KIND_STRUCT);
++					 BTF_KIND_STRUCT);
 +	if (type_id < 0) {
 +		pr_warn("security_hook_heads not found in vmlinux BTF\n");
 +		return type_id;

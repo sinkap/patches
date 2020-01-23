@@ -1,4 +1,4 @@
-From 58c8911bd383e91fa9d924f30eaa966eb2ab62d5 Mon Sep 17 00:00:00 2001
+From 6e710b354626cb860dc027c10afdadfdd387c313 Mon Sep 17 00:00:00 2001
 From: KP Singh <kpsingh@google.com>
 Date: Wed, 8 Jan 2020 23:34:28 +0100
 Subject: [PATCH bpf-next v3 06/10] bpf: lsm: Implement attach, detach and
@@ -38,6 +38,7 @@ When an attachment (BPF_PROG_ATTACH) is requested:
 Signed-off-by: KP Singh <kpsingh@google.com>
 Reviewed-by: Brendan Jackman <jackmanb@google.com>
 Reviewed-by: Florent Revest <revest@google.com>
+Reviewed-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
 Reviewed-by: Thomas Garnier <thgarnie@google.com>
 ---
  include/linux/bpf.h            |   4 +
@@ -336,7 +337,7 @@ index 9438d899b618..a915c549f4b8 100644
  	  This enables instrumentation of the security hooks with
  	  eBPF programs.
 diff --git a/security/bpf/hooks.c b/security/bpf/hooks.c
-index c61100abc657..d2deffb30004 100644
+index e9dc6933b6fa..f1d4fdcdb20e 100644
 --- a/security/bpf/hooks.c
 +++ b/security/bpf/hooks.c
 @@ -6,11 +6,14 @@

@@ -1,4 +1,4 @@
-From 1f076eae046b5ff4e339675302c063e202d459b9 Mon Sep 17 00:00:00 2001
+From fbe207596445353a6d07039cb129d2289ddf03b4 Mon Sep 17 00:00:00 2001
 From: KP Singh <kpsingh@google.com>
 Date: Wed, 8 Jan 2020 00:37:17 +0100
 Subject: [PATCH bpf-next v3 05/10] bpf: lsm: BTF API for LSM hooks
@@ -9,15 +9,15 @@ two types:
 
 - struct security_hook_heads: This type provides the offset (using the
   lsm_hook_idx passed by the userspace) to which a new dynamically
-  allocated security hook must be attached to.
+  allocated security hook must be attached
 - union security_list_options: This provides the information about the
-  function prototype required by the hook.
+  function prototype required by the hook
 
 The type_ids for these types are calculated once during __init as
-bpf_type_by_name_kind does a linear search with string compariason.
-Furthermore, the total number of LSM hooks which can be determined from
-the btf_type_vlen of security_hook_heads is needed (in a subsequent
-patch) to initialize the mutable hooks for the BPF LSM.
+bpf_type_by_name_kind does an expensive linear search with string
+compariason.  Furthermore, the total number of LSM hooks which can be
+determined from the btf_type_vlen of security_hook_heads is needed (in a
+subsequent patch) to initialize the mutable hooks for the BPF LSM.
 
 When the program is loaded:
 
@@ -96,7 +96,7 @@ index c526927c337d..748b9b7d4bc7 100644
 +
 +ccflags-y := -I$(srctree)/security/bpf -I$(srctree)/security/bpf/include
 diff --git a/security/bpf/hooks.c b/security/bpf/hooks.c
-index b123d9cb4cd4..c61100abc657 100644
+index b123d9cb4cd4..e9dc6933b6fa 100644
 --- a/security/bpf/hooks.c
 +++ b/security/bpf/hooks.c
 @@ -5,8 +5,12 @@
@@ -162,7 +162,7 @@ index b123d9cb4cd4..c61100abc657 100644
 +const struct btf_type *bpf_lsm_type_by_idx(struct btf *btf, u32 idx)
 +{
 +	const struct btf_member *member, *hook_head = NULL;
-+	const struct btf_type *t, *hook_type = NULL;
++	const struct btf_type *t;
 +	u32 i;
 +
 +	hook_head = bpf_lsm_head_by_idx(btf, idx);
@@ -171,14 +171,14 @@ index b123d9cb4cd4..c61100abc657 100644
 +
 +	for_each_member(i, bpf_lsm_info.btf_hook_types, member) {
 +		if (hook_head->name_off == member->name_off) {
-+			hook_type = btf_type_by_id(btf, member->type);
-+			if (unlikely(!hook_type))
++			t = btf_type_by_id(btf, member->type);
++			if (unlikely(!t))
 +				return ERR_PTR(-EINVAL);
 +
-+			if (!btf_type_is_ptr(hook_type))
++			if (!btf_type_is_ptr(t))
 +				return ERR_PTR(-EINVAL);
 +
-+			t = btf_type_by_id(btf, hook_type->type);
++			t = btf_type_by_id(btf, t->type);
 +			if (unlikely(!t))
 +				return ERR_PTR(-EINVAL);
 +			return t;

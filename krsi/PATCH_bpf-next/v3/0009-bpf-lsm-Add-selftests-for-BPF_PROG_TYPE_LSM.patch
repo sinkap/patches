@@ -1,4 +1,4 @@
-From 3b03a17fa470e0f8641a3318933bab2feeeebba6 Mon Sep 17 00:00:00 2001
+From 96bedf925ca442cd3fd4c2b034a55b0e4789a6d5 Mon Sep 17 00:00:00 2001
 From: KP Singh <kpsingh@google.com>
 Date: Wed, 8 Jan 2020 23:55:22 +0100
 Subject: [PATCH bpf-next v3 09/10] bpf: lsm: Add selftests for

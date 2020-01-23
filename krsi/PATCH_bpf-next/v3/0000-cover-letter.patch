@@ -8,12 +8,13 @@ Subject: [PATCH bpf-next v3 00/10]  MAC and Audit policy using eBPF (KRSI)
 * LSM_ORDER_LAST is introduced to represent the behaviour of the BPF LSM
 * Fixed the inadvertent clobbering of the LSM Hook error codes
 * Added GPL license requirement to the commit log
-* The lsm_hook_idx is now the more conventional 0-based
+* The lsm_hook_idx is now the more conventional 0-based index
 * Some changes were split into a separate patch ("Load btf_vmlinux only
   once per object")
   https://lore.kernel.org/bpf/20200117212825.11755-1-kpsingh@chromium.org/
 * Addressed Andrii's feedback on the BTF implementation
-* Documentation update for using generated vmlinux.h to simplify programs
+* Documentation update for using generated vmlinux.h to simplify
+  programs
 * Rebase
 
 # Changes since v1 (https://lore.kernel.org/bpf/20191220154208.15895-1-kpsingh@chromium.org/):
