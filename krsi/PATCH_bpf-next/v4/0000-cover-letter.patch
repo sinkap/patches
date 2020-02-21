@@ -15,7 +15,7 @@ Subject: [PATCH bpf-next v4 0/8] MAC and Audit policy using eBPF (KRSI)
     https://lore.kernel.org/bpf/CAG48ez25mW+_oCxgCtbiGMX07g_ph79UOJa07h=o_6B6+Q-u5g@mail.gmail.com/
 
 * Since the code does not deal with security_hook_heads anymore, it goes
-  from "being a BPF LSM" to “BPF program attachment to LSM hooks".
+  from "being a BPF LSM" to "BPF program attachment to LSM hooks".
 
 * Added a new test case which ensures that the BPF programs' return value
   is reflected by the LSM hook.
