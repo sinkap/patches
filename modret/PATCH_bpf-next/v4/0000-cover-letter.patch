@@ -1,0 +1,95 @@
+From b51a3044723e9183e6dd63c993160065c9a98d08 Mon Sep 17 00:00:00 2001
+From: KP Singh <kpsingh@google.com>
+Date: Wed, 4 Mar 2020 20:10:09 +0100
+Subject: [PATCH bpf-next v4 0/7] Introduce BPF_MODIFY_RET tracing progs
+
+v3 -> v4:
+
+* Fix a memory leak noticed by Daniel.
+
+v2 -> v3:
+
+* bpf_trampoline_update_progs -> bpf_trampoline_get_progs + const
+  qualification.
+* Typos in commit messages.
+* Added Andrii's Acks.
+
+v1 -> v2:
+
+* Adressed Andrii's feedback.
+* Fixed a bug that Alexei noticed about nop generation.
+* Rebase.
+
+This was brought up in the KRSI v4 discussion and found to be useful
+both for security and tracing programs.
+
+  https://lore.kernel.org/bpf/20200225193108.GB22391@chromium.org/
+
+The modify_return programs are allowed for security hooks (with an
+extra CAP_MAC_ADMIN check) and functions whitelisted for error
+injection (ALLOW_ERROR_INJECTION).
+
+The "security_" check is expected to be cleaned up with the KRSI patch
+series.
+
+Here is an example of how a fmod_ret program behaves:
+
+int func_to_be_attached(int a, int b)
+{  <--- do_fentry
+
+do_fmod_ret:
+   <update ret by calling fmod_ret>
+   if (ret != 0)
+        goto do_fexit;
+
+original_function:
+
+    <side_effects_happen_here>
+
+}  <--- do_fexit
+
+ALLOW_ERROR_INJECTION(func_to_be_attached, ERRNO)
+
+The fmod_ret program attached to this function can be defined as:
+
+SEC("fmod_ret/func_to_be_attached")
+int BPF_PROG(func_name, int a, int b, int ret)
+{
+        // This will skip the original function logic.
+        return -1;
+}
+
+
+KP Singh (7):
+  bpf: Refactor trampoline update code
+  bpf: JIT helpers for fmod_ret progs
+  bpf: Introduce BPF_MODIFY_RETURN
+  bpf: Attachment verification for BPF_MODIFY_RETURN
+  tools/libbpf: Add support for BPF_MODIFY_RETURN
+  bpf: Add test ops for BPF_PROG_TYPE_TRACING
+  bpf: Add selftests for BPF_MODIFY_RETURN
+
+ arch/x86/net/bpf_jit_comp.c                   | 279 +++++++++++++-----
+ include/linux/bpf.h                           |  24 +-
+ include/uapi/linux/bpf.h                      |   1 +
+ kernel/bpf/bpf_struct_ops.c                   |  10 +-
+ kernel/bpf/btf.c                              |  27 +-
+ kernel/bpf/syscall.c                          |   1 +
+ kernel/bpf/trampoline.c                       |  65 ++--
+ kernel/bpf/verifier.c                         |  32 ++
+ kernel/trace/bpf_trace.c                      |   1 +
+ net/bpf/test_run.c                            |  57 +++-
+ tools/include/uapi/linux/bpf.h                |   1 +
+ tools/lib/bpf/libbpf.c                        |   4 +
+ .../selftests/bpf/prog_tests/fentry_fexit.c   |  12 +-
+ .../selftests/bpf/prog_tests/fentry_test.c    |  14 +-
+ .../selftests/bpf/prog_tests/fexit_test.c     |  69 ++---
+ .../selftests/bpf/prog_tests/modify_return.c  |  65 ++++
+ .../selftests/bpf/progs/modify_return.c       |  49 +++
+ 17 files changed, 524 insertions(+), 187 deletions(-)
+ create mode 100644 tools/testing/selftests/bpf/prog_tests/modify_return.c
+ create mode 100644 tools/testing/selftests/bpf/progs/modify_return.c
+
+-- 
+2.20.1
+

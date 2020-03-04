@@ -1,0 +1,30 @@
+From 383aab44e9affa1d414bf3477b12a3669891a94b Mon Sep 17 00:00:00 2001
+From: KP Singh <kpsingh@google.com>
+Date: Wed, 26 Feb 2020 22:00:07 +0100
+Subject: [PATCH bpf-next v4 5/7] tools/libbpf: Add support for
+ BPF_MODIFY_RETURN
+
+Signed-off-by: KP Singh <kpsingh@google.com>
+Acked-by: Andrii Nakryiko <andriin@fb.com>
+---
+ tools/lib/bpf/libbpf.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/tools/lib/bpf/libbpf.c b/tools/lib/bpf/libbpf.c
+index f8c4042e5855..223be01dc466 100644
+--- a/tools/lib/bpf/libbpf.c
++++ b/tools/lib/bpf/libbpf.c
+@@ -6288,6 +6288,10 @@ static const struct bpf_sec_def section_defs[] = {
+ 		.expected_attach_type = BPF_TRACE_FENTRY,
+ 		.is_attach_btf = true,
+ 		.attach_fn = attach_trace),
++	SEC_DEF("fmod_ret/", TRACING,
++		.expected_attach_type = BPF_MODIFY_RETURN,
++		.is_attach_btf = true,
++		.attach_fn = attach_trace),
+ 	SEC_DEF("fexit/", TRACING,
+ 		.expected_attach_type = BPF_TRACE_FEXIT,
+ 		.is_attach_btf = true,
+-- 
+2.20.1
+
