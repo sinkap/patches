@@ -3,6 +3,13 @@ From: KP Singh <kpsingh@google.com>
 Date: Wed, 4 Mar 2020 16:35:40 +0100
 Subject: [PATCH bpf-next v3 0/7] Introduce BPF_MODIFY_RET tracing progs
 
+v2 -> v3:
+
+* bpf_trampoline_update_progs -> bpf_trampoline_get_progs + const
+  qualification.
+* Typos in commit messages.
+* Added Andrii's Acks.
+
 v1 -> v2:
 
 * Adressed Andrii's feedback.
