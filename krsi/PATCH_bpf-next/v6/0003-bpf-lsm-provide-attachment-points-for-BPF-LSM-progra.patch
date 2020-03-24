@@ -1,0 +1,76 @@
+From ab98f53682830bfe90b12536e456b2f21dad1de8 Mon Sep 17 00:00:00 2001
+From: KP Singh <kpsingh@google.com>
+Date: Thu, 19 Mar 2020 23:24:05 +0100
+Subject: [PATCH bpf-next v6 3/8] bpf: lsm: provide attachment points for BPF
+ LSM programs
+
+When CONFIG_BPF_LSM is enabled, nops functions, bpf_lsm_<hook_name>, are
+generated for each LSM hook. These nops are initialized as LSM hooks in
+a subsequent patch.
+
+Signed-off-by: KP Singh <kpsingh@google.com>
+Reviewed-by: Brendan Jackman <jackmanb@google.com>
+Reviewed-by: Florent Revest <revest@google.com>
+Reviewed-by: Kees Cook <keescook@chromium.org>
+Acked-by: Yonghong Song <yhs@fb.com>
+---
+ include/linux/bpf_lsm.h | 21 +++++++++++++++++++++
+ kernel/bpf/bpf_lsm.c    | 14 ++++++++++++++
+ 2 files changed, 35 insertions(+)
+ create mode 100644 include/linux/bpf_lsm.h
+
+diff --git a/include/linux/bpf_lsm.h b/include/linux/bpf_lsm.h
+new file mode 100644
+index 000000000000..848a0177a5f9
+--- /dev/null
++++ b/include/linux/bpf_lsm.h
+@@ -0,0 +1,21 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++
++/*
++ * Copyright (C) 2020 Google LLC.
++ */
++
++#ifndef _LINUX_BPF_LSM_H
++#define _LINUX_BPF_LSM_H
++
++#include <linux/bpf.h>
++#include <linux/lsm_hooks.h>
++
++#ifdef CONFIG_BPF_LSM
++
++#define LSM_HOOK(RET, DEFAULT, NAME, ...) RET bpf_lsm_##NAME(__VA_ARGS__);
++#include <linux/lsm_hook_defs.h>
++#undef LSM_HOOK
++
++#endif /* CONFIG_BPF_LSM */
++
++#endif /* _LINUX_BPF_LSM_H */
+diff --git a/kernel/bpf/bpf_lsm.c b/kernel/bpf/bpf_lsm.c
+index 82875039ca90..d24881491d50 100644
+--- a/kernel/bpf/bpf_lsm.c
++++ b/kernel/bpf/bpf_lsm.c
+@@ -7,6 +7,20 @@
+ #include <linux/filter.h>
+ #include <linux/bpf.h>
+ #include <linux/btf.h>
++#include <linux/lsm_hooks.h>
++#include <linux/bpf_lsm.h>
++
++/* For every LSM hook  that allows attachment of BPF programs, declare a NOP
++ * function where a BPF program can be attached as an fexit trampoline.
++ */
++#define LSM_HOOK(RET, DEFAULT, NAME, ...) \
++noinline __weak RET bpf_lsm_##NAME(__VA_ARGS__)	\
++{						\
++	return DEFAULT;				\
++}
++
++#include <linux/lsm_hook_defs.h>
++#undef LSM_HOOK
+ 
+ const struct bpf_prog_ops lsm_prog_ops = {
+ };
+-- 
+2.20.1
+
