@@ -1,0 +1,15 @@
+#!/bin/bash
+
+cat << EOF
+Alexei Starovoitov <ast@kernel.org>
+Daniel Borkmann <daniel@iogearbox.net>
+James Morris <jmorris@namei.org>
+Kees Cook <keescook@chromium.org>
+Paul Turner <pjt@google.com>
+Jann Horn <jannh@google.com>
+Florent Revest <revest@chromium.org>
+Brendan Jackman <jackmanb@chromium.org>
+Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+EOF
+
+
