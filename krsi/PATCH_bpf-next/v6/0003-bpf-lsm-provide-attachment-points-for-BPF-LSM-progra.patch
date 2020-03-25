@@ -1,12 +1,12 @@
-From ab98f53682830bfe90b12536e456b2f21dad1de8 Mon Sep 17 00:00:00 2001
+From edfe1690029f3bb034c92254e37b1f1d7b580c68 Mon Sep 17 00:00:00 2001
 From: KP Singh <kpsingh@google.com>
 Date: Thu, 19 Mar 2020 23:24:05 +0100
 Subject: [PATCH bpf-next v6 3/8] bpf: lsm: provide attachment points for BPF
  LSM programs
 
-When CONFIG_BPF_LSM is enabled, nops functions, bpf_lsm_<hook_name>, are
-generated for each LSM hook. These nops are initialized as LSM hooks in
-a subsequent patch.
+When CONFIG_BPF_LSM is enabled, nop functions, bpf_lsm_<hook_name>, are
+generated for each LSM hook. These functions are initialized as LSM
+hooks in a subsequent patch.
 
 Signed-off-by: KP Singh <kpsingh@google.com>
 Reviewed-by: Brendan Jackman <jackmanb@google.com>
@@ -14,17 +14,17 @@ Reviewed-by: Florent Revest <revest@google.com>
 Reviewed-by: Kees Cook <keescook@chromium.org>
 Acked-by: Yonghong Song <yhs@fb.com>
 ---
- include/linux/bpf_lsm.h | 21 +++++++++++++++++++++
+ include/linux/bpf_lsm.h | 22 ++++++++++++++++++++++
  kernel/bpf/bpf_lsm.c    | 14 ++++++++++++++
- 2 files changed, 35 insertions(+)
+ 2 files changed, 36 insertions(+)
  create mode 100644 include/linux/bpf_lsm.h
 
 diff --git a/include/linux/bpf_lsm.h b/include/linux/bpf_lsm.h
 new file mode 100644
-index 000000000000..848a0177a5f9
+index 000000000000..83b96895829f
 --- /dev/null
 +++ b/include/linux/bpf_lsm.h
-@@ -0,0 +1,21 @@
+@@ -0,0 +1,22 @@
 +/* SPDX-License-Identifier: GPL-2.0 */
 +
 +/*
@@ -39,7 +39,8 @@ index 000000000000..848a0177a5f9
 +
 +#ifdef CONFIG_BPF_LSM
 +
-+#define LSM_HOOK(RET, DEFAULT, NAME, ...) RET bpf_lsm_##NAME(__VA_ARGS__);
++#define LSM_HOOK(RET, DEFAULT, NAME, ...) \
++	RET bpf_lsm_##NAME(__VA_ARGS__);
 +#include <linux/lsm_hook_defs.h>
 +#undef LSM_HOOK
 +
@@ -47,7 +48,7 @@ index 000000000000..848a0177a5f9
 +
 +#endif /* _LINUX_BPF_LSM_H */
 diff --git a/kernel/bpf/bpf_lsm.c b/kernel/bpf/bpf_lsm.c
-index 82875039ca90..d24881491d50 100644
+index 82875039ca90..1210a819ca52 100644
 --- a/kernel/bpf/bpf_lsm.c
 +++ b/kernel/bpf/bpf_lsm.c
 @@ -7,6 +7,20 @@
@@ -57,10 +58,10 @@ index 82875039ca90..d24881491d50 100644
 +#include <linux/lsm_hooks.h>
 +#include <linux/bpf_lsm.h>
 +
-+/* For every LSM hook  that allows attachment of BPF programs, declare a NOP
-+ * function where a BPF program can be attached as an fexit trampoline.
++/* For every LSM hook that allows attachment of BPF programs, declare a nop
++ * function where a BPF program can be attached.
 + */
-+#define LSM_HOOK(RET, DEFAULT, NAME, ...) \
++#define LSM_HOOK(RET, DEFAULT, NAME, ...) 	\
 +noinline __weak RET bpf_lsm_##NAME(__VA_ARGS__)	\
 +{						\
 +	return DEFAULT;				\

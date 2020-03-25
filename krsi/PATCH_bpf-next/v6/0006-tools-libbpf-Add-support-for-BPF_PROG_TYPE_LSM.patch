@@ -1,4 +1,4 @@
-From 8fd60b0a70b8601e0e7c9bd6ecfdd033ac1048ef Mon Sep 17 00:00:00 2001
+From c1693e759c31f56e8e7864468e968ce6bbcc004b Mon Sep 17 00:00:00 2001
 From: KP Singh <kpsingh@google.com>
 Date: Thu, 19 Mar 2020 16:52:16 +0100
 Subject: [PATCH bpf-next v6 6/8] tools/libbpf: Add support for

@@ -1,4 +1,4 @@
-From 8cd22cad86d113b00aaf077490c7002e3e262b01 Mon Sep 17 00:00:00 2001
+From beb8ecb0e66ee34665aa389830ca1d64480e197d Mon Sep 17 00:00:00 2001
 From: KP Singh <kpsingh@google.com>
 Date: Thu, 19 Mar 2020 17:14:34 +0100
 Subject: [PATCH bpf-next v6 8/8] bpf: lsm: Add Documentation
@@ -18,7 +18,7 @@ Reviewed-by: Thomas Garnier <thgarnie@google.com>
 
 diff --git a/Documentation/bpf/bpf_lsm.rst b/Documentation/bpf/bpf_lsm.rst
 new file mode 100644
-index 000000000000..4446748f50f5
+index 000000000000..2a2c3b4a74d4
 --- /dev/null
 +++ b/Documentation/bpf/bpf_lsm.rst
 @@ -0,0 +1,150 @@
@@ -82,7 +82,7 @@ index 000000000000..4446748f50f5
 +requiring the definition of the types.
 +
 +The eBPF programs can be declared using the``BPF_PROG``
-+macros defined in `tools/testing/selftests/bpf/bpf_trace_helpers.h`_. In this
++macros defined in `tools/lib/bpf/bpf_tracing.h`_. In this
 +example:
 +
 +	* ``"lsm/file_mprotect"`` indicates the LSM hook that the program must
@@ -159,19 +159,19 @@ index 000000000000..4446748f50f5
 +Examples
 +--------
 +
-+Example eBPF programs can be found in
-+`tools/testing/selftests/bpf/progs/lsm_int_hook.c`_ and `tools/testing/selftests/bpf/progs/lsm_void_hook.c`_ and the corresponding
-+userspace code in `tools/testing/selftests/bpf/prog_tests/lsm_test.c`_
++An example eBPF programs can be found in
++`tools/testing/selftests/bpf/progs/lsm.c`_ and the corresponding
++userspace code in `tools/testing/selftests/bpf/prog_tests/test_lsm.c`_
 +
 +.. Links
-+.. _tools/testing/selftests/bpf/bpf_trace_helpers.h:
-+   https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/tree/tools/testing/selftests/selftests/bpf/bpf_trace_helpers.h
-+.. _tools/testing/selftests/bpf/progs/lsm_int_hook.c:
-+   https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/tree/tools/testing/selftests/bpf/progs/lsm_int_hook.c
++.. _tools/lib/bpf/bpf_tracing.h:
++   https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/tree/tools/lib/bpf/bpf_tracing.h
++.. _tools/testing/selftests/bpf/progs/lsm.c:
++   https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/tree/tools/testing/selftests/bpf/progs/lsm.c
 +.. _tools/testing/selftests/bpf/progs/lsm_void_hook.c:
 +   https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/tree/tools/testing/selftests/bpf/progs/lsm_void_hook.c
-+.. _tools/testing/selftests/bpf/prog_tests/lsm_test.c:
-+   https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/tree/tools/testing/selftests/bpf/prog_tests/lsm_test.c
++.. _tools/testing/selftests/bpf/prog_tests/test_lsm.c:
++   https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/tree/tools/testing/selftests/bpf/prog_tests/test_lsm.c
 diff --git a/Documentation/bpf/index.rst b/Documentation/bpf/index.rst
 index 4f5410b61441..2c3d3c0cb7bb 100644
 --- a/Documentation/bpf/index.rst
