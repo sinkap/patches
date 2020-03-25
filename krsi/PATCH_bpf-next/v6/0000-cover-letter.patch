@@ -8,8 +8,7 @@ Subject: [PATCH bpf-next v6 0/8] MAC and Audit policy using eBPF (KRSI)
   https://lwn.net/Articles/815826/
 
 * Updated LSM_HOOK macro to define a default value and cleaned up the
-  BPF LSM hook declarations. Found some more hooks that pass a different
-  initial return code to call_int_hook macros.
+  BPF LSM hook declarations.
 * Added Yonghong's Acks and Kees' Reviewed-by tags.
 * Simplification of the selftest code.
 * Rebase and fixes suggested by Andrii and Yonghong and some other minor

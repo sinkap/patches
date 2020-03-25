@@ -1,11 +1,11 @@
-From bb996e5df7acf6b6918026467d71969f6e4d0a26 Mon Sep 17 00:00:00 2001
+From 6ac95ef1674179c541967df135a986032076a540 Mon Sep 17 00:00:00 2001
 From: KP Singh <kpsingh@google.com>
 Date: Thu, 19 Mar 2020 23:30:28 +0100
 Subject: [PATCH bpf-next v6 5/8] bpf: lsm: Initialize the BPF LSM hooks
 
 * The hooks are initialized using the definitions in
   include/linux/lsm_hook_defs.h.
-* The LSM can be enabled / disabled with CONFIG_LSM.
+* The LSM can be enabled / disabled with CONFIG_BPF_LSM.
 
 Signed-off-by: KP Singh <kpsingh@google.com>
 Reviewed-by: Brendan Jackman <jackmanb@google.com>

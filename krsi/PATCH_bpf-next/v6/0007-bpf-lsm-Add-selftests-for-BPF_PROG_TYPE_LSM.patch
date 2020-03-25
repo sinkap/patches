@@ -1,9 +1,9 @@
-From 05b02709d04cc5901f60c984044fc2f62d914ca0 Mon Sep 17 00:00:00 2001
+From bef6d2403d301d87be2679a9765ef6d4f83636ca Mon Sep 17 00:00:00 2001
 From: KP Singh <kpsingh@google.com>
 Date: Thu, 19 Mar 2020 23:25:37 +0100
 Subject: [PATCH bpf-next v6 7/8] bpf: lsm: Add selftests for BPF_PROG_TYPE_LSM
 
-* Load/attach a BPF program that hooks to a file_mprotect (int)
+* Load/attach a BPF program that hooks to file_mprotect (int)
   and bprm_committed_creds (void).
 * Perform an action that triggers the hook.
 * Verify if the audit event was received using the shared global

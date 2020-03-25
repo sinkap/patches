@@ -1,4 +1,4 @@
-From f1d90643194fa665c973ff3abff83eb6528c6b33 Mon Sep 17 00:00:00 2001
+From 0db887572c981aa1c2c9275bb8394fdde4ce6fdf Mon Sep 17 00:00:00 2001
 From: KP Singh <kpsingh@google.com>
 Date: Thu, 19 Mar 2020 23:22:09 +0100
 Subject: [PATCH bpf-next v6 1/8] bpf: Introduce BPF_PROG_TYPE_LSM
@@ -17,13 +17,13 @@ Acked-by: Yonghong Song <yhs@fb.com>
  include/linux/bpf.h            |  3 +++
  include/linux/bpf_types.h      |  4 ++++
  include/uapi/linux/bpf.h       |  2 ++
- init/Kconfig                   | 10 ++++++++++
+ init/Kconfig                   | 12 ++++++++++++
  kernel/bpf/Makefile            |  1 +
  kernel/bpf/bpf_lsm.c           | 17 +++++++++++++++++
  kernel/trace/bpf_trace.c       | 12 ++++++------
  tools/include/uapi/linux/bpf.h |  2 ++
  tools/lib/bpf/libbpf_probes.c  |  1 +
- 10 files changed, 47 insertions(+), 6 deletions(-)
+ 10 files changed, 49 insertions(+), 6 deletions(-)
  create mode 100644 kernel/bpf/bpf_lsm.c
 
 diff --git a/MAINTAINERS b/MAINTAINERS
@@ -88,10 +88,10 @@ index 5d01c5c7e598..9f2673c58788 100644
  };
  
 diff --git a/init/Kconfig b/init/Kconfig
-index 20a6ac33761c..b2c9a833bc58 100644
+index 20a6ac33761c..deae572d1927 100644
 --- a/init/Kconfig
 +++ b/init/Kconfig
-@@ -1616,6 +1616,16 @@ config KALLSYMS_BASE_RELATIVE
+@@ -1616,6 +1616,18 @@ config KALLSYMS_BASE_RELATIVE
  # end of the "standard kernel features (expert users)" menu
  
  # syscall, maps, verifier
@@ -99,6 +99,8 @@ index 20a6ac33761c..b2c9a833bc58 100644
 +config BPF_LSM
 +	bool "LSM Instrumentation with BPF"
 +	depends on BPF_SYSCALL
++	depends on SECURITY
++	depends on BPF_JIT
 +	help
 +	  Enables instrumentation of the security hooks with eBPF programs for
 +	  implementing dynamic MAC and Audit Policies.
