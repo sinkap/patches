@@ -1,4 +1,4 @@
-From 0ee28a60ba12af7e65e92c93db32d902275fffb3 Mon Sep 17 00:00:00 2001
+From 6bf7d13c9f7023b793607926dc7651cc45423fd8 Mon Sep 17 00:00:00 2001
 From: KP Singh <kpsingh@google.com>
 Date: Thu, 19 Mar 2020 23:12:50 +0100
 Subject: [PATCH bpf-next v8 2/8] security: Refactor declaration of LSM hooks
@@ -19,6 +19,7 @@ with <default_value> acccessible in security.c as:
   LSM_RET_DEFAULT(<hook_name>)
 
 Signed-off-by: KP Singh <kpsingh@google.com>
+Acked-by: James Morris <jamorris@linux.microsoft.com>
 Reviewed-by: Brendan Jackman <jackmanb@google.com>
 Reviewed-by: Florent Revest <revest@google.com>
 Reviewed-by: Kees Cook <keescook@chromium.org>

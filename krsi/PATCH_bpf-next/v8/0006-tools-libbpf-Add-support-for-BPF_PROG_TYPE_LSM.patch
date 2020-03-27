@@ -1,4 +1,4 @@
-From 20e497252cbd500da8e33c8fc449c2137607f265 Mon Sep 17 00:00:00 2001
+From 7548a6b10639374d7f21403817df7ddee9e69592 Mon Sep 17 00:00:00 2001
 From: KP Singh <kpsingh@google.com>
 Date: Thu, 19 Mar 2020 16:52:16 +0100
 Subject: [PATCH bpf-next v8 6/8] tools/libbpf: Add support for
@@ -16,6 +16,7 @@ Acked-by: Yonghong Song <yhs@fb.com>
 Acked-by: Andrii Nakryiko <andriin@fb.com>
 Reviewed-by: Brendan Jackman <jackmanb@google.com>
 Reviewed-by: Florent Revest <revest@google.com>
+Reviewed-by: James Morris <jamorris@linux.microsoft.com>
 ---
  tools/lib/bpf/bpf.c      |  3 ++-
  tools/lib/bpf/libbpf.c   | 39 +++++++++++++++++++++++++++++++++++----

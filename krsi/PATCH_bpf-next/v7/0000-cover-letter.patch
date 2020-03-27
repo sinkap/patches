@@ -11,7 +11,7 @@ Subject: [PATCH bpf-next v7 0/8] MAC and Audit policy using eBPF (KRSI)
   Will send a separate patch (if needed) to update the noinline
   definition in include/linux/compiler_attributes.h.
 * waitpid to wait specifically for the forked child in selftests.
-* Comment format fixes in security/... as Suggested by Casey.
+* Comment format fixes in security/... as suggested by Casey.
 * Added Acks from Kees and Andrii and Casey's Reviewed-by: tags to
   the respective patches.
 * Rebase

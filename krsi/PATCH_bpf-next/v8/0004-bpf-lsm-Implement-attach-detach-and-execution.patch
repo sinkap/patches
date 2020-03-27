@@ -1,4 +1,4 @@
-From e9f17fcc6808eebaac1b8b520abf9c31622a15ca Mon Sep 17 00:00:00 2001
+From 304824104c754a309bec65d39ffc229285593707 Mon Sep 17 00:00:00 2001
 From: KP Singh <kpsingh@google.com>
 Date: Thu, 19 Mar 2020 23:19:18 +0100
 Subject: [PATCH bpf-next v8 4/8] bpf: lsm: Implement attach, detach and
@@ -27,12 +27,12 @@ Reviewed-by: Brendan Jackman <jackmanb@google.com>
 Reviewed-by: Florent Revest <revest@google.com>
 ---
  include/linux/bpf_lsm.h | 11 ++++++++
- kernel/bpf/bpf_lsm.c    | 28 ++++++++++++++++++++
- kernel/bpf/btf.c        |  9 ++++++-
+ kernel/bpf/bpf_lsm.c    | 23 +++++++++++++++++
+ kernel/bpf/btf.c        | 16 +++++++++++-
  kernel/bpf/syscall.c    | 57 ++++++++++++++++++++++++++++-------------
  kernel/bpf/trampoline.c | 17 +++++++++---
  kernel/bpf/verifier.c   | 19 +++++++++++---
- 6 files changed, 114 insertions(+), 27 deletions(-)
+ 6 files changed, 116 insertions(+), 27 deletions(-)
 
 diff --git a/include/linux/bpf_lsm.h b/include/linux/bpf_lsm.h
 index 83b96895829f..af74712af585 100644
@@ -57,7 +57,7 @@ index 83b96895829f..af74712af585 100644
  
  #endif /* _LINUX_BPF_LSM_H */
 diff --git a/kernel/bpf/bpf_lsm.c b/kernel/bpf/bpf_lsm.c
-index e43e29690f22..e6160f0df3f1 100644
+index 3b3bbb28603e..19636703b24e 100644
 --- a/kernel/bpf/bpf_lsm.c
 +++ b/kernel/bpf/bpf_lsm.c
 @@ -9,6 +9,8 @@
@@ -69,7 +69,7 @@ index e43e29690f22..e6160f0df3f1 100644
  
  /* For every LSM hook that allows attachment of BPF programs, declare a nop
   * function where a BPF program can be attached.
-@@ -22,6 +24,32 @@ noinline RET bpf_lsm_##NAME(__VA_ARGS__)	\
+@@ -22,6 +24,27 @@ noinline RET bpf_lsm_##NAME(__VA_ARGS__)	\
  #include <linux/lsm_hook_defs.h>
  #undef LSM_HOOK
  
@@ -78,11 +78,6 @@ index e43e29690f22..e6160f0df3f1 100644
 +int bpf_lsm_verify_prog(struct bpf_verifier_log *vlog,
 +			const struct bpf_prog *prog)
 +{
-+	/* Only CAP_MAC_ADMIN users are allowed to make changes to LSM hooks
-+	 */
-+	if (!capable(CAP_MAC_ADMIN))
-+		return -EPERM;
-+
 +	if (!prog->gpl_compatible) {
 +		bpf_log(vlog,
 +			"LSM programs must have a GPL compatible license\n");
@@ -103,27 +98,34 @@ index e43e29690f22..e6160f0df3f1 100644
  };
  
 diff --git a/kernel/bpf/btf.c b/kernel/bpf/btf.c
-index 6f397c4da05e..67466dd59a35 100644
+index 6f397c4da05e..de335cd386f0 100644
 --- a/kernel/bpf/btf.c
 +++ b/kernel/bpf/btf.c
-@@ -3710,7 +3710,14 @@ bool btf_ctx_access(int off, int size, enum bpf_access_type type,
+@@ -3710,7 +3710,21 @@ bool btf_ctx_access(int off, int size, enum bpf_access_type type,
  	}
  
  	if (arg == nr_args) {
 -		if (prog->expected_attach_type == BPF_TRACE_FEXIT) {
-+		/* BPF_LSM_MAC programs only have int and void functions they
-+		 * can be attached to. When they are attached to a void function
-+		 * they result in the creation of an FEXIT trampoline and when
-+		 * to a function that returns an int, a MODIFY_RETURN
-+		 * trampoline.
-+		 */
 +		if (prog->expected_attach_type == BPF_TRACE_FEXIT ||
 +		    prog->expected_attach_type == BPF_LSM_MAC) {
++			/* When LSM programs are attached to void LSM hooks
++			 * they use FEXIT trampolines and when attached to
++			 * int LSM hooks, they use MODIFY_RETURN trampolines.
++			 *
++			 * While the LSM programs are BPF_MODIFY_RETURN-like
++			 * the check:
++			 *
++			 *	if (ret_type != 'int')
++			 *		return -EINVAL;
++			 *
++			 * is _not_ done here. This is still safe as LSM hooks
++			 * have only void and int return types.
++			 */
  			if (!t)
  				return true;
  			t = btf_type_by_id(btf, t->type);
 diff --git a/kernel/bpf/syscall.c b/kernel/bpf/syscall.c
-index 85567a6ea5f9..ca8d3ce01197 100644
+index b2584b25748c..a616b63f23b4 100644
 --- a/kernel/bpf/syscall.c
 +++ b/kernel/bpf/syscall.c
 @@ -25,6 +25,7 @@
@@ -142,7 +144,7 @@ index 85567a6ea5f9..ca8d3ce01197 100644
  		case BPF_PROG_TYPE_STRUCT_OPS:
  		case BPF_PROG_TYPE_EXT:
  			break;
-@@ -2367,10 +2369,28 @@ static int bpf_tracing_prog_attach(struct bpf_prog *prog)
+@@ -2366,10 +2368,28 @@ static int bpf_tracing_prog_attach(struct bpf_prog *prog)
  	struct file *link_file;
  	int link_fd, err;
  
@@ -175,7 +177,7 @@ index 85567a6ea5f9..ca8d3ce01197 100644
  		err = -EINVAL;
  		goto out_put_prog;
  	}
-@@ -2449,16 +2469,10 @@ static int bpf_raw_tracepoint_open(const union bpf_attr *attr)
+@@ -2448,16 +2468,10 @@ static int bpf_raw_tracepoint_open(const union bpf_attr *attr)
  	if (IS_ERR(prog))
  		return PTR_ERR(prog);
  
@@ -196,7 +198,7 @@ index 85567a6ea5f9..ca8d3ce01197 100644
  		if (attr->raw_tracepoint.name) {
  			/* The attach point for this category of programs
  			 * should be specified via btf_id during program load.
-@@ -2466,11 +2480,14 @@ static int bpf_raw_tracepoint_open(const union bpf_attr *attr)
+@@ -2465,11 +2479,14 @@ static int bpf_raw_tracepoint_open(const union bpf_attr *attr)
  			err = -EINVAL;
  			goto out_put_prog;
  		}
@@ -215,7 +217,7 @@ index 85567a6ea5f9..ca8d3ce01197 100644
  		if (strncpy_from_user(buf,
  				      u64_to_user_ptr(attr->raw_tracepoint.name),
  				      sizeof(buf) - 1) < 0) {
-@@ -2479,6 +2496,10 @@ static int bpf_raw_tracepoint_open(const union bpf_attr *attr)
+@@ -2478,6 +2495,10 @@ static int bpf_raw_tracepoint_open(const union bpf_attr *attr)
  		}
  		buf[sizeof(buf) - 1] = 0;
  		tp_name = buf;

@@ -1,4 +1,4 @@
-From f7f8fe41054023b0d624af29ad3dc9487659ea3d Mon Sep 17 00:00:00 2001
+From bc46820204b53b9922e23f192a2827c50586c7aa Mon Sep 17 00:00:00 2001
 From: KP Singh <kpsingh@google.com>
 Date: Thu, 19 Mar 2020 23:30:28 +0100
 Subject: [PATCH bpf-next v8 5/8] bpf: lsm: Initialize the BPF LSM hooks
@@ -9,6 +9,7 @@ Subject: [PATCH bpf-next v8 5/8] bpf: lsm: Initialize the BPF LSM hooks
 
 Signed-off-by: KP Singh <kpsingh@google.com>
 Acked-by: Kees Cook <keescook@chromium.org>
+Acked-by: James Morris <jamorris@linux.microsoft.com>
 Reviewed-by: Brendan Jackman <jackmanb@google.com>
 Reviewed-by: Florent Revest <revest@google.com>
 ---

@@ -1,4 +1,4 @@
-From 79d8ff8dae3dc25a007ffaa946105bc47e3a380b Mon Sep 17 00:00:00 2001
+From f88f5c0d2b4bb968d5236d16cc7268a128e442c6 Mon Sep 17 00:00:00 2001
 From: KP Singh <kpsingh@google.com>
 Date: Thu, 19 Mar 2020 23:25:37 +0100
 Subject: [PATCH bpf-next v8 7/8] bpf: lsm: Add selftests for BPF_PROG_TYPE_LSM
@@ -15,6 +15,7 @@ Acked-by: Andrii Nakryiko <andriin@fb.com>
 Reviewed-by: Brendan Jackman <jackmanb@google.com>
 Reviewed-by: Florent Revest <revest@google.com>
 Reviewed-by: Thomas Garnier <thgarnie@google.com>
+Reviewed-by: James Morris <jamorris@linux.microsoft.com>
 ---
  tools/testing/selftests/bpf/config            |  2 +
  .../selftests/bpf/prog_tests/test_lsm.c       | 86 +++++++++++++++++++

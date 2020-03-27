@@ -1,4 +1,4 @@
-From 3246419710cf46bdbc7366f0cf769ec08ddaa044 Mon Sep 17 00:00:00 2001
+From beee70d4c497f622a6280816d04214a0d9cee78a Mon Sep 17 00:00:00 2001
 From: KP Singh <kpsingh@google.com>
 Date: Thu, 19 Mar 2020 17:14:34 +0100
 Subject: [PATCH bpf-next v8 8/8] bpf: lsm: Add Documentation
@@ -10,18 +10,19 @@ Signed-off-by: KP Singh <kpsingh@google.com>
 Reviewed-by: Brendan Jackman <jackmanb@google.com>
 Reviewed-by: Florent Revest <revest@google.com>
 Reviewed-by: Thomas Garnier <thgarnie@google.com>
+Reviewed-by: James Morris <jamorris@linux.microsoft.com>
 ---
- Documentation/bpf/bpf_lsm.rst | 146 ++++++++++++++++++++++++++++++++++
+ Documentation/bpf/bpf_lsm.rst | 142 ++++++++++++++++++++++++++++++++++
  Documentation/bpf/index.rst   |   1 +
- 2 files changed, 147 insertions(+)
+ 2 files changed, 143 insertions(+)
  create mode 100644 Documentation/bpf/bpf_lsm.rst
 
 diff --git a/Documentation/bpf/bpf_lsm.rst b/Documentation/bpf/bpf_lsm.rst
 new file mode 100644
-index 000000000000..b204f0fc00b7
+index 000000000000..1c0a75a51d79
 --- /dev/null
 +++ b/Documentation/bpf/bpf_lsm.rst
-@@ -0,0 +1,146 @@
+@@ -0,0 +1,142 @@
 +.. SPDX-License-Identifier: GPL-2.0+
 +.. Copyright (C) 2020 Google LLC.
 +
@@ -31,9 +32,7 @@ index 000000000000..b204f0fc00b7
 +
 +These BPF programs allow runtime instrumentation of the LSM hooks by privileged
 +users to implement system-wide MAC (Mandatory Access Control) and Audit
-+policies using eBPF. Since these program end up modifying the MAC policies of
-+the system, they require both ``CAP_MAC_ADMIN`` and also require
-+``CAP_SYS_ADMIN`` for the loading of BPF programs.
++policies using eBPF.
 +
 +Structure
 +---------
@@ -71,7 +70,7 @@ index 000000000000..b204f0fc00b7
 +
 +.. code-block:: console
 +
-+        # bpftool btf dump file <path-to-btf-vmlinux> format c > vmlinux.h
++	# bpftool btf dump file <path-to-btf-vmlinux> format c > vmlinux.h
 +
 +.. note:: ``path-to-btf-vmlinux`` can be ``/sys/kernel/btf/vmlinux`` if the
 +	  build environment matches the environment the BPF programs are
@@ -90,15 +89,15 @@ index 000000000000..b204f0fc00b7
 +
 +.. code-block:: c
 +
-+        SEC("lsm/file_mprotect")
-+        int BPF_PROG(mprotect_audit, struct vm_area_struct *vma,
-+                     unsigned long reqprot, unsigned long prot, int ret)
++	SEC("lsm/file_mprotect")
++	int BPF_PROG(mprotect_audit, struct vm_area_struct *vma,
++		     unsigned long reqprot, unsigned long prot, int ret)
 +	{
-+                /* Ret is the return value from the previous BPF program
-+                 * or 0 if it's the first hook.
-+                 */
-+                if (ret != 0)
-+                        return ret;
++		/* ret is the return value from the previous BPF program
++		 * or 0 if it's the first hook.
++		 */
++		if (ret != 0)
++			return ret;
 +
 +		int is_heap;
 +
@@ -155,7 +154,7 @@ index 000000000000..b204f0fc00b7
 +Examples
 +--------
 +
-+An example eBPF programs can be found in
++An example eBPF program can be found in
 +`tools/testing/selftests/bpf/progs/lsm.c`_ and the corresponding
 +userspace code in `tools/testing/selftests/bpf/prog_tests/test_lsm.c`_
 +
@@ -164,8 +163,6 @@ index 000000000000..b204f0fc00b7
 +   https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/tree/tools/lib/bpf/bpf_tracing.h
 +.. _tools/testing/selftests/bpf/progs/lsm.c:
 +   https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/tree/tools/testing/selftests/bpf/progs/lsm.c
-+.. _tools/testing/selftests/bpf/progs/lsm_void_hook.c:
-+   https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/tree/tools/testing/selftests/bpf/progs/lsm_void_hook.c
 +.. _tools/testing/selftests/bpf/prog_tests/test_lsm.c:
 +   https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/tree/tools/testing/selftests/bpf/prog_tests/test_lsm.c
 diff --git a/Documentation/bpf/index.rst b/Documentation/bpf/index.rst

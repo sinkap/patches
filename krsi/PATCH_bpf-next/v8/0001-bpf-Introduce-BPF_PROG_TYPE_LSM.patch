@@ -1,4 +1,4 @@
-From 0410ead6933911bf50e316d92848f7e862cee5f2 Mon Sep 17 00:00:00 2001
+From 13b1d5410813075097fc90321b53f2e14b6153ba Mon Sep 17 00:00:00 2001
 From: KP Singh <kpsingh@google.com>
 Date: Thu, 19 Mar 2020 23:22:09 +0100
 Subject: [PATCH bpf-next v8 1/8] bpf: Introduce BPF_PROG_TYPE_LSM
@@ -13,6 +13,7 @@ Reviewed-by: Florent Revest <revest@google.com>
 Reviewed-by: Thomas Garnier <thgarnie@google.com>
 Acked-by: Yonghong Song <yhs@fb.com>
 Acked-by: Andrii Nakryiko <andriin@fb.com>
+Acked-by: James Morris <jamorris@linux.microsoft.com>
 ---
  MAINTAINERS                    |  1 +
  include/linux/bpf.h            |  3 +++
