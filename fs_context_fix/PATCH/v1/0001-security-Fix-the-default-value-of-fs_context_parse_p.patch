@@ -1,0 +1,38 @@
+From 6fd6941221bc41b71758275953ae40bf4105ffd5 Mon Sep 17 00:00:00 2001
+From: KP Singh <kpsingh@google.com>
+Date: Thu, 30 Apr 2020 16:47:19 +0200
+Subject: [PATCH] security: Fix the default value of fs_context_parse_param
+ hook
+
+The current default i.e. 0 means that all the parameters are expected to
+be parsed by the LSM and none of them end up being populated in the
+LSM context.
+
+This was noticed when lsm=bpf is supplied on the command line before any
+other LSM. As the bpf lsm uses this default value to implement a default
+hook and failure to parse any fs_context parameters resulted in a
+failure to mount the root filesystem.
+
+Fixes: 98e828a0650f ("security: Refactor declaration of LSM hooks")
+Reported-by: Mikko Ylinen <mikko.ylinen@linux.intel.com>
+Signed-off-by: KP Singh <kpsingh@google.com>
+---
+ include/linux/lsm_hook_defs.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/include/linux/lsm_hook_defs.h b/include/linux/lsm_hook_defs.h
+index 9cd4455528e5..1bdd027766d4 100644
+--- a/include/linux/lsm_hook_defs.h
++++ b/include/linux/lsm_hook_defs.h
+@@ -55,7 +55,7 @@ LSM_HOOK(void, LSM_RET_VOID, bprm_committing_creds, struct linux_binprm *bprm)
+ LSM_HOOK(void, LSM_RET_VOID, bprm_committed_creds, struct linux_binprm *bprm)
+ LSM_HOOK(int, 0, fs_context_dup, struct fs_context *fc,
+ 	 struct fs_context *src_sc)
+-LSM_HOOK(int, 0, fs_context_parse_param, struct fs_context *fc,
++LSM_HOOK(int, -ENOPARAM, fs_context_parse_param, struct fs_context *fc,
+ 	 struct fs_parameter *param)
+ LSM_HOOK(int, 0, sb_alloc_security, struct super_block *sb)
+ LSM_HOOK(void, LSM_RET_VOID, sb_free_security, struct super_block *sb)
+-- 
+2.26.2.303.gf8c07b1a785-goog
+
