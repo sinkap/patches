@@ -1,0 +1,48 @@
+From cd9d923b0b0829d8565c24bd7767b87f139322a8 Mon Sep 17 00:00:00 2001
+From: KP Singh <kpsingh@google.com>
+Date: Mon, 18 May 2020 11:43:23 +0200
+Subject: [PATCH bpf 0/4] *** SUBJECT HERE ***
+
+*** BLURB HERE ***
+
+KP Singh (4):
+  bpf: Generalize bpf_sk_storage
+  bpf: Extend bpf_local_storage for inodes
+  bpf: Allow local storage to be used from LSM programs
+  bpf: selftests for inode_local_storage
+
+ fs/inode.c                                    |    6 +
+ .../bpf_local_storage.h}                      |   12 +-
+ include/linux/bpf_types.h                     |    1 +
+ include/linux/fs.h                            |    5 +
+ include/net/sock.h                            |    4 +-
+ include/uapi/linux/bpf.h                      |   52 +-
+ kernel/bpf/Makefile                           |    1 +
+ kernel/bpf/bpf_local_storage.c                | 1594 +++++++++++++++++
+ kernel/bpf/bpf_lsm.c                          |   22 +-
+ kernel/bpf/cgroup.c                           |    2 +-
+ kernel/bpf/syscall.c                          |    3 +-
+ kernel/bpf/verifier.c                         |   10 +
+ net/bpf/test_run.c                            |    2 +-
+ net/core/Makefile                             |    1 -
+ net/core/bpf_sk_storage.c                     | 1183 ------------
+ net/core/filter.c                             |    2 +-
+ net/core/sock.c                               |    2 +-
+ net/ipv4/bpf_tcp_ca.c                         |    2 +-
+ net/ipv4/inet_diag.c                          |    2 +-
+ tools/bpf/bpftool/map.c                       |    1 +
+ tools/include/uapi/linux/bpf.h                |   58 +-
+ tools/lib/bpf/libbpf_probes.c                 |    5 +-
+ .../selftests/bpf/map_tests/sk_storage_map.c  |    2 +-
+ .../bpf/prog_tests/test_inode_local_storage.c |   54 +
+ .../selftests/bpf/progs/inode_local_storage.c |   70 +
+ 25 files changed, 1889 insertions(+), 1207 deletions(-)
+ rename include/{net/bpf_sk_storage.h => linux/bpf_local_storage.h} (79%)
+ create mode 100644 kernel/bpf/bpf_local_storage.c
+ delete mode 100644 net/core/bpf_sk_storage.c
+ create mode 100644 tools/testing/selftests/bpf/prog_tests/test_inode_local_storage.c
+ create mode 100644 tools/testing/selftests/bpf/progs/inode_local_storage.c
+
+-- 
+2.26.2.761.g0e0b3e54be-goog
+

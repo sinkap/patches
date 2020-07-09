@@ -3,6 +3,14 @@ From: KP Singh <kpsingh@google.com>
 Date: Wed, 17 Jun 2020 21:43:54 +0200
 Subject: [PATCH bpf-next v2 0/4] Generalizing bpf_local_storage
 
+# v1 -> v2
+
+* Use the security blob pointer instead of dedicated member in
+  struct inode.
+* Better code re-use as suggested by Alexei.
+* Dropped the inode count arithmetic as pointed out by Alexei.
+* Minor bug fixes and rebase.
+
 bpf_sk_storage can already be used by some BPF program types to annotate
 socket objects. These annotations are managed with the life-cycle of the
 object (i.e. freed when the object is freed) which makes BPF programs

@@ -1,0 +1,56 @@
+From e80e7f20ada02c41819dd6a5eaaa5fd40d64c4a2 Mon Sep 17 00:00:00 2001
+From: KP Singh <kpsingh@google.com>
+Date: Fri, 15 May 2020 13:55:11 +0200
+Subject: [PATCH bpf 3/4] bpf: Allow local storage to be used from LSM programs
+
+Signed-off-by: KP Singh <kpsingh@google.com>
+---
+ kernel/bpf/bpf_lsm.c | 22 +++++++++++++++++++++-
+ 1 file changed, 21 insertions(+), 1 deletion(-)
+
+diff --git a/kernel/bpf/bpf_lsm.c b/kernel/bpf/bpf_lsm.c
+index 19636703b24e..c5dd7f5683ca 100644
+--- a/kernel/bpf/bpf_lsm.c
++++ b/kernel/bpf/bpf_lsm.c
+@@ -11,6 +11,7 @@
+ #include <linux/bpf_lsm.h>
+ #include <linux/kallsyms.h>
+ #include <linux/bpf_verifier.h>
++#include <linux/bpf_local_storage.h>
+ 
+ /* For every LSM hook that allows attachment of BPF programs, declare a nop
+  * function where a BPF program can be attached.
+@@ -45,10 +46,29 @@ int bpf_lsm_verify_prog(struct bpf_verifier_log *vlog,
+ 	return 0;
+ }
+ 
++static const struct bpf_func_proto *
++bpf_lsm_func_proto(enum bpf_func_id func_id, const struct bpf_prog *prog)
++{
++
++	switch (func_id) {
++	case BPF_FUNC_inode_storage_get:
++		return &bpf_inode_storage_get_proto;
++	case BPF_FUNC_inode_storage_delete:
++		return &bpf_inode_storage_delete_proto;
++	case BPF_FUNC_sk_storage_get:
++		return &bpf_sk_storage_get_proto;
++	case BPF_FUNC_sk_storage_delete:
++		return &bpf_sk_storage_delete_proto;
++	default:
++		return bpf_tracing_func_proto(func_id, prog);
++	}
++
++}
++
+ const struct bpf_prog_ops lsm_prog_ops = {
+ };
+ 
+ const struct bpf_verifier_ops lsm_verifier_ops = {
+-	.get_func_proto = bpf_tracing_func_proto,
++	.get_func_proto = bpf_lsm_func_proto,
+ 	.is_valid_access = btf_ctx_access,
+ };
+-- 
+2.26.2.761.g0e0b3e54be-goog
+

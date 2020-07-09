@@ -1,0 +1,152 @@
+From cd9d923b0b0829d8565c24bd7767b87f139322a8 Mon Sep 17 00:00:00 2001
+From: KP Singh <kpsingh@google.com>
+Date: Fri, 15 May 2020 13:11:37 +0200
+Subject: [PATCH bpf 4/4] bpf: selftests for inode_local_storage
+
+Signed-off-by: KP Singh <kpsingh@google.com>
+---
+ .../bpf/prog_tests/test_inode_local_storage.c | 54 ++++++++++++++
+ .../selftests/bpf/progs/inode_local_storage.c | 70 +++++++++++++++++++
+ 2 files changed, 124 insertions(+)
+ create mode 100644 tools/testing/selftests/bpf/prog_tests/test_inode_local_storage.c
+ create mode 100644 tools/testing/selftests/bpf/progs/inode_local_storage.c
+
+diff --git a/tools/testing/selftests/bpf/prog_tests/test_inode_local_storage.c b/tools/testing/selftests/bpf/prog_tests/test_inode_local_storage.c
+new file mode 100644
+index 000000000000..a42aa623ee0c
+--- /dev/null
++++ b/tools/testing/selftests/bpf/prog_tests/test_inode_local_storage.c
+@@ -0,0 +1,54 @@
++// SPDX-License-Identifier: GPL-2.0
++
++/*
++ * Copyright (C) 2020 Google LLC.
++ */
++
++#include <test_progs.h>
++#include <sys/mman.h>
++#include <sys/wait.h>
++#include <unistd.h>
++#include <malloc.h>
++#include <stdlib.h>
++
++#include "inode_local_storage.skel.h"
++
++int create_and_unlink_file()
++{
++	char fname[4096] = "/tmp/fileXXXXXX";
++	int fd;
++
++	fd = mkstemp(fname);
++	if (fd < 0)
++		return fd;
++
++	close(fd);
++	unlink(fname);
++	return 0;
++}
++
++void test_test_inode_local_storage(void)
++{
++	struct inode_local_storage *skel = NULL;
++	int err, duration = 0;
++
++	skel = inode_local_storage__open_and_load();
++	if (CHECK(!skel, "skel_load", "lsm skeleton failed\n"))
++		goto close_prog;
++
++	err = inode_local_storage__attach(skel);
++	if (CHECK(err, "attach", "lsm attach failed: %d\n", err))
++		goto close_prog;
++
++	skel->bss->monitored_pid = getpid();
++
++	err = create_and_unlink_file();
++	if (CHECK(err < 0, "exec_cmd", "err %d errno %d\n", err, errno))
++		goto close_prog;
++
++	CHECK(!skel->bss->test_result, "test_result",
++	      "inode_local_storage not set");
++
++close_prog:
++	inode_local_storage__destroy(skel);
++}
+diff --git a/tools/testing/selftests/bpf/progs/inode_local_storage.c b/tools/testing/selftests/bpf/progs/inode_local_storage.c
+new file mode 100644
+index 000000000000..9f5609ee1522
+--- /dev/null
++++ b/tools/testing/selftests/bpf/progs/inode_local_storage.c
+@@ -0,0 +1,70 @@
++// SPDX-License-Identifier: GPL-2.0
++
++/*
++ * Copyright 2020 Google LLC.
++ */
++
++#include "vmlinux.h"
++#include <bpf/bpf_helpers.h>
++#include <bpf/bpf_tracing.h>
++#include  <errno.h>
++
++char _license[] SEC("license") = "GPL";
++__u32 _version SEC("version") = 1;
++
++#define DUMMY_STORAGE_VALUE 0xdeadbeef
++
++int monitored_pid = 0;
++bool test_result = false;
++
++struct inode_storage {
++	__u32 value;
++};
++
++struct {
++	__uint(type, BPF_MAP_TYPE_INODE_STORAGE);
++	__uint(map_flags, BPF_F_NO_PREALLOC);
++	__type(key, int);
++	__type(value, struct inode_storage);
++} inode_storage_map SEC(".maps");
++
++SEC("lsm/inode_unlink")
++int BPF_PROG(unlink_hook, struct inode *dir, struct dentry *victim)
++{
++	__u32 pid = bpf_get_current_pid_tgid() >> 32;
++	struct inode_storage *storage;
++
++	if (pid != monitored_pid)
++		return 0;
++
++	storage = bpf_inode_storage_get(&inode_storage_map, victim->d_inode, 0,
++				     BPF_SK_STORAGE_GET_F_CREATE);
++	if (!storage)
++		return 0;
++
++	if (storage->value == DUMMY_STORAGE_VALUE)
++		test_result = true;
++
++	return 0;
++}
++
++SEC("lsm/file_open")
++int BPF_PROG(test_int_hook, struct file *file)
++{
++	__u32 pid = bpf_get_current_pid_tgid() >> 32;
++	struct inode_storage *storage;
++
++	if (pid != monitored_pid)
++		return 0;
++
++	if (!file->f_inode)
++		return 0;
++
++	storage = bpf_inode_storage_get(&inode_storage_map, file->f_inode, 0,
++				     BPF_LOCAL_STORAGE_GET_F_CREATE);
++	if (!storage)
++		return 0;
++
++	storage->value = DUMMY_STORAGE_VALUE;
++	return 0;
++}
+-- 
+2.26.2.761.g0e0b3e54be-goog
+

@@ -1,0 +1,36 @@
+From 7d44438d57f8a8670d973543aebcb80ff49680ea Mon Sep 17 00:00:00 2001
+From: KP Singh <kpsingh@google.com>
+Date: Wed, 27 May 2020 15:49:26 +0200
+Subject: [PATCH] fs: Add an explicit might_sleep() to iput
+
+It is currently mentioned in the comments to the function that iput
+might sleep when the inode is destroyed. Have it call might_sleep, as
+dput already does.
+
+Adding an explicity might_sleep() would help in quickly realizing that
+iput is called from a place where sleeping is not allowed when
+CONFIG_DEBUG_ATOMIC_SLEEP is enabled as noticed in the dicussion:
+
+  https://lore.kernel.org/bpf/20200527021111.GA197666@google.com/
+
+Signed-off-by: KP Singh <kpsingh@google.com>
+Reviewed-by: Brendan Jackman <jackmanb@chromium.org>
+---
+ fs/inode.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/fs/inode.c b/fs/inode.c
+index cc6e701b7e5d..f55e72e76266 100644
+--- a/fs/inode.c
++++ b/fs/inode.c
+@@ -1583,6 +1583,7 @@ static void iput_final(struct inode *inode)
+  */
+ void iput(struct inode *inode)
+ {
++	might_sleep();
+ 	if (!inode)
+ 		return;
+ 	BUG_ON(inode->i_state & I_CLEAR);
+-- 
+2.27.0.rc0.183.gde8f92d652-goog
+
