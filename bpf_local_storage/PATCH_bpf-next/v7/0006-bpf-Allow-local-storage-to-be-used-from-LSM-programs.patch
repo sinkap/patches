@@ -1,0 +1,197 @@
+From 48388c430c84bb650295dd46d89f368199ef2d8d Mon Sep 17 00:00:00 2001
+From: KP Singh <kpsingh@google.com>
+Date: Fri, 15 May 2020 13:55:11 +0200
+Subject: [PATCH bpf-next v7 6/7] bpf: Allow local storage to be used from LSM
+ programs
+
+Adds support for both bpf_{sk, inode}_storage_{get, delete} to be used
+in LSM programs. These helpers are not used for tracing programs
+(currently) as their usage is tied to the life-cycle of the object and
+should only be used where the owning object won't be freed (when the
+owning object is passed as an argument to the LSM hook). Thus, they
+are safer to use in LSM hooks than tracing. Usage of local storage in
+tracing programs will probably follow a per function based whitelist
+approach.
+
+Since the UAPI helper signature for bpf_sk_storage expect a bpf_sock,
+it, leads to a compilation warning for LSM programs, it's also updated
+to accept a void * pointer instead.
+
+Signed-off-by: KP Singh <kpsingh@google.com>
+---
+ include/net/bpf_sk_storage.h   |  2 ++
+ include/uapi/linux/bpf.h       |  8 ++++++--
+ kernel/bpf/bpf_lsm.c           | 21 ++++++++++++++++++++-
+ net/core/bpf_sk_storage.c      | 27 +++++++++++++++++++++++++++
+ tools/include/uapi/linux/bpf.h |  8 ++++++--
+ 5 files changed, 61 insertions(+), 5 deletions(-)
+
+diff --git a/include/net/bpf_sk_storage.h b/include/net/bpf_sk_storage.h
+index 847926cf2899..c5702d7baeaa 100644
+--- a/include/net/bpf_sk_storage.h
++++ b/include/net/bpf_sk_storage.h
+@@ -20,6 +20,8 @@ void bpf_sk_storage_free(struct sock *sk);
+ 
+ extern const struct bpf_func_proto bpf_sk_storage_get_proto;
+ extern const struct bpf_func_proto bpf_sk_storage_delete_proto;
++extern const struct bpf_func_proto sk_storage_get_btf_proto;
++extern const struct bpf_func_proto sk_storage_delete_btf_proto;
+ 
+ struct bpf_sk_storage_diag;
+ struct sk_buff;
+diff --git a/include/uapi/linux/bpf.h b/include/uapi/linux/bpf.h
+index d3617f1ce3fc..c01211c8a7bc 100644
+--- a/include/uapi/linux/bpf.h
++++ b/include/uapi/linux/bpf.h
+@@ -2802,7 +2802,7 @@ union bpf_attr {
+  *
+  *		**-ERANGE** if resulting value was out of range.
+  *
+- * void *bpf_sk_storage_get(struct bpf_map *map, struct bpf_sock *sk, void *value, u64 flags)
++ * void *bpf_sk_storage_get(struct bpf_map *map, void *sk, void *value, u64 flags)
+  *	Description
+  *		Get a bpf-local-storage from a *sk*.
+  *
+@@ -2818,6 +2818,10 @@ union bpf_attr {
+  *		"type". The bpf-local-storage "type" (i.e. the *map*) is
+  *		searched against all bpf-local-storages residing at *sk*.
+  *
++ *		For socket programs, *sk* should be a **struct bpf_sock** pointer
++ *		and an **ARG_PTR_TO_BTF_ID** of type **struct sock** for LSM
++ *		programs.
++ *
+  *		An optional *flags* (**BPF_SK_STORAGE_GET_F_CREATE**) can be
+  *		used such that a new bpf-local-storage will be
+  *		created if one does not exist.  *value* can be used
+@@ -2830,7 +2834,7 @@ union bpf_attr {
+  *		**NULL** if not found or there was an error in adding
+  *		a new bpf-local-storage.
+  *
+- * long bpf_sk_storage_delete(struct bpf_map *map, struct bpf_sock *sk)
++ * long bpf_sk_storage_delete(struct bpf_map *map, void *sk)
+  *	Description
+  *		Delete a bpf-local-storage from a *sk*.
+  *	Return
+diff --git a/kernel/bpf/bpf_lsm.c b/kernel/bpf/bpf_lsm.c
+index fb278144e9fd..9cd1428c7199 100644
+--- a/kernel/bpf/bpf_lsm.c
++++ b/kernel/bpf/bpf_lsm.c
+@@ -11,6 +11,8 @@
+ #include <linux/bpf_lsm.h>
+ #include <linux/kallsyms.h>
+ #include <linux/bpf_verifier.h>
++#include <net/bpf_sk_storage.h>
++#include <linux/bpf_local_storage.h>
+ 
+ /* For every LSM hook that allows attachment of BPF programs, declare a nop
+  * function where a BPF program can be attached.
+@@ -45,10 +47,27 @@ int bpf_lsm_verify_prog(struct bpf_verifier_log *vlog,
+ 	return 0;
+ }
+ 
++static const struct bpf_func_proto *
++bpf_lsm_func_proto(enum bpf_func_id func_id, const struct bpf_prog *prog)
++{
++	switch (func_id) {
++	case BPF_FUNC_inode_storage_get:
++		return &bpf_inode_storage_get_proto;
++	case BPF_FUNC_inode_storage_delete:
++		return &bpf_inode_storage_delete_proto;
++	case BPF_FUNC_sk_storage_get:
++		return &sk_storage_get_btf_proto;
++	case BPF_FUNC_sk_storage_delete:
++		return &sk_storage_delete_btf_proto;
++	default:
++		return tracing_prog_func_proto(func_id, prog);
++	}
++}
++
+ const struct bpf_prog_ops lsm_prog_ops = {
+ };
+ 
+ const struct bpf_verifier_ops lsm_verifier_ops = {
+-	.get_func_proto = tracing_prog_func_proto,
++	.get_func_proto = bpf_lsm_func_proto,
+ 	.is_valid_access = btf_ctx_access,
+ };
+diff --git a/net/core/bpf_sk_storage.c b/net/core/bpf_sk_storage.c
+index 8f6a8d6549be..c547ddf69b91 100644
+--- a/net/core/bpf_sk_storage.c
++++ b/net/core/bpf_sk_storage.c
+@@ -12,6 +12,7 @@
+ #include <net/sock.h>
+ #include <uapi/linux/sock_diag.h>
+ #include <uapi/linux/btf.h>
++#include <linux/btf_ids.h>
+ 
+ DEFINE_BPF_STORAGE_CACHE(sk_cache);
+ 
+@@ -374,6 +375,32 @@ const struct bpf_func_proto bpf_sk_storage_delete_proto = {
+ 	.arg2_type	= ARG_PTR_TO_SOCKET,
+ };
+ 
++BTF_ID_LIST(sk_storage_get_btf_ids)
++BTF_ID(struct, sock)
++
++const struct bpf_func_proto sk_storage_get_btf_proto = {
++	.func		= bpf_sk_storage_get,
++	.gpl_only	= false,
++	.ret_type	= RET_PTR_TO_MAP_VALUE_OR_NULL,
++	.arg1_type	= ARG_CONST_MAP_PTR,
++	.arg2_type	= ARG_PTR_TO_BTF_ID,
++	.arg3_type	= ARG_PTR_TO_MAP_VALUE_OR_NULL,
++	.arg4_type	= ARG_ANYTHING,
++	.btf_id		= sk_storage_get_btf_ids,
++};
++
++BTF_ID_LIST(sk_storage_delete_btf_ids)
++BTF_ID(struct, sock)
++
++const struct bpf_func_proto sk_storage_delete_btf_proto = {
++	.func		= bpf_sk_storage_delete,
++	.gpl_only	= false,
++	.ret_type	= RET_INTEGER,
++	.arg1_type	= ARG_CONST_MAP_PTR,
++	.arg2_type	= ARG_PTR_TO_BTF_ID,
++	.btf_id		= sk_storage_delete_btf_ids,
++};
++
+ struct bpf_sk_storage_diag {
+ 	u32 nr_maps;
+ 	struct bpf_map *maps[];
+diff --git a/tools/include/uapi/linux/bpf.h b/tools/include/uapi/linux/bpf.h
+index d3617f1ce3fc..c01211c8a7bc 100644
+--- a/tools/include/uapi/linux/bpf.h
++++ b/tools/include/uapi/linux/bpf.h
+@@ -2802,7 +2802,7 @@ union bpf_attr {
+  *
+  *		**-ERANGE** if resulting value was out of range.
+  *
+- * void *bpf_sk_storage_get(struct bpf_map *map, struct bpf_sock *sk, void *value, u64 flags)
++ * void *bpf_sk_storage_get(struct bpf_map *map, void *sk, void *value, u64 flags)
+  *	Description
+  *		Get a bpf-local-storage from a *sk*.
+  *
+@@ -2818,6 +2818,10 @@ union bpf_attr {
+  *		"type". The bpf-local-storage "type" (i.e. the *map*) is
+  *		searched against all bpf-local-storages residing at *sk*.
+  *
++ *		For socket programs, *sk* should be a **struct bpf_sock** pointer
++ *		and an **ARG_PTR_TO_BTF_ID** of type **struct sock** for LSM
++ *		programs.
++ *
+  *		An optional *flags* (**BPF_SK_STORAGE_GET_F_CREATE**) can be
+  *		used such that a new bpf-local-storage will be
+  *		created if one does not exist.  *value* can be used
+@@ -2830,7 +2834,7 @@ union bpf_attr {
+  *		**NULL** if not found or there was an error in adding
+  *		a new bpf-local-storage.
+  *
+- * long bpf_sk_storage_delete(struct bpf_map *map, struct bpf_sock *sk)
++ * long bpf_sk_storage_delete(struct bpf_map *map, void *sk)
+  *	Description
+  *		Delete a bpf-local-storage from a *sk*.
+  *	Return
+-- 
+2.28.0.rc0.142.g3c755180ce-goog
+
