@@ -1,4 +1,4 @@
-From 7851ac1658db102944044a219b3a3826f32d2c55 Mon Sep 17 00:00:00 2001
+From fe94d001880872051e778baa6b67b9f4340180c9 Mon Sep 17 00:00:00 2001
 From: KP Singh <kpsingh@google.com>
 Date: Fri, 15 May 2020 13:55:11 +0200
 Subject: [PATCH bpf-next v9 6/7] bpf: Allow local storage to be used from LSM
@@ -41,7 +41,7 @@ index 3c516dd07caf..119f4c9c3a9c 100644
  struct bpf_local_storage_elem;
  struct bpf_sk_storage_diag;
 diff --git a/include/uapi/linux/bpf.h b/include/uapi/linux/bpf.h
-index c6575e25ef46..96810c423980 100644
+index b0504ab59a2e..c7f0a806932d 100644
 --- a/include/uapi/linux/bpf.h
 +++ b/include/uapi/linux/bpf.h
 @@ -2808,7 +2808,7 @@ union bpf_attr {
@@ -115,7 +115,7 @@ index fb278144e9fd..9cd1428c7199 100644
  	.is_valid_access = btf_ctx_access,
  };
 diff --git a/net/core/bpf_sk_storage.c b/net/core/bpf_sk_storage.c
-index 4b2685259a1e..346b36fb00db 100644
+index f29d9a9b4ea4..55fae03b4cc3 100644
 --- a/net/core/bpf_sk_storage.c
 +++ b/net/core/bpf_sk_storage.c
 @@ -12,6 +12,7 @@
@@ -158,7 +158,7 @@ index 4b2685259a1e..346b36fb00db 100644
  	u32 nr_maps;
  	struct bpf_map *maps[];
 diff --git a/tools/include/uapi/linux/bpf.h b/tools/include/uapi/linux/bpf.h
-index c6575e25ef46..96810c423980 100644
+index b0504ab59a2e..c7f0a806932d 100644
 --- a/tools/include/uapi/linux/bpf.h
 +++ b/tools/include/uapi/linux/bpf.h
 @@ -2808,7 +2808,7 @@ union bpf_attr {

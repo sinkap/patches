@@ -1,4 +1,4 @@
-From 0e43ef571b4e0b56349d35f3ea19391ba9bf697f Mon Sep 17 00:00:00 2001
+From ee9a3a7fc51dc403fb7fbbd45956788408b6b4cc Mon Sep 17 00:00:00 2001
 From: KP Singh <kpsingh@google.com>
 Date: Tue, 14 Jul 2020 20:11:21 +0200
 Subject: [PATCH bpf-next v9 2/7] bpf: Generalize caching for sk_storage.
@@ -57,7 +57,7 @@ index 5036c94c0503..950c5aaba15e 100644
  int bpf_sk_storage_clone(const struct sock *sk, struct sock *newsk);
  struct bpf_sk_storage_diag *
 diff --git a/net/core/bpf_sk_storage.c b/net/core/bpf_sk_storage.c
-index b65a13e3f809..a911fc2c845d 100644
+index b21d2956c161..b783c8cfeddd 100644
 --- a/net/core/bpf_sk_storage.c
 +++ b/net/core/bpf_sk_storage.c
 @@ -14,6 +14,8 @@
@@ -80,7 +80,7 @@ index b65a13e3f809..a911fc2c845d 100644
  
  struct bpf_local_storage {
  	struct bpf_local_storage_data __rcu *cache[BPF_LOCAL_STORAGE_CACHE_SIZE];
-@@ -520,16 +518,16 @@ static int sk_storage_delete(struct sock *sk, struct bpf_map *map)
+@@ -521,16 +519,16 @@ static int sk_storage_delete(struct sock *sk, struct bpf_map *map)
  	return 0;
  }
  
@@ -101,7 +101,7 @@ index b65a13e3f809..a911fc2c845d 100644
  			res = i;
  
  			/* Found a free cache_idx */
-@@ -537,18 +535,19 @@ static u16 cache_idx_get(void)
+@@ -538,18 +536,19 @@ static u16 cache_idx_get(void)
  				break;
  		}
  	}
@@ -127,7 +127,7 @@ index b65a13e3f809..a911fc2c845d 100644
  }
  
  /* Called by __sk_destruct() & bpf_sk_storage_clone() */
-@@ -600,7 +599,7 @@ static void bpf_local_storage_map_free(struct bpf_map *map)
+@@ -601,7 +600,7 @@ static void bpf_local_storage_map_free(struct bpf_map *map)
  
  	smap = (struct bpf_local_storage_map *)map;
  
@@ -136,7 +136,7 @@ index b65a13e3f809..a911fc2c845d 100644
  
  	/* Note that this map might be concurrently cloned from
  	 * bpf_sk_storage_clone. Wait for any existing bpf_sk_storage_clone
-@@ -718,7 +717,7 @@ static struct bpf_map *bpf_local_storage_map_alloc(union bpf_attr *attr)
+@@ -719,7 +718,7 @@ static struct bpf_map *bpf_local_storage_map_alloc(union bpf_attr *attr)
  
  	smap->elem_size =
  		sizeof(struct bpf_local_storage_elem) + attr->value_size;

@@ -1,4 +1,4 @@
-From a2f737adec2a93bfb6380c7daeec22faf6f9f2a0 Mon Sep 17 00:00:00 2001
+From 4bc07e0696dfece44d7f4be351f4a76f4cf7629c Mon Sep 17 00:00:00 2001
 From: KP Singh <kpsingh@google.com>
 Date: Mon, 18 May 2020 12:03:20 +0200
 Subject: [PATCH bpf-next v9 5/7] bpf: Implement bpf_local_storage for inodes
@@ -93,7 +93,7 @@ index a52a5688418e..2e6f568377f1 100644
  #if defined(CONFIG_XDP_SOCKETS)
  BPF_MAP_TYPE(BPF_MAP_TYPE_XSKMAP, xsk_map_ops)
 diff --git a/include/uapi/linux/bpf.h b/include/uapi/linux/bpf.h
-index e33a06f7164d..c6575e25ef46 100644
+index f1a4a476586b..b0504ab59a2e 100644
 --- a/include/uapi/linux/bpf.h
 +++ b/include/uapi/linux/bpf.h
 @@ -155,6 +155,7 @@ enum bpf_map_type {
@@ -156,7 +156,7 @@ index e33a06f7164d..c6575e25ef46 100644
  
  /* integer value in 'imm' field of BPF_CALL instruction selects which helper
 diff --git a/kernel/bpf/Makefile b/kernel/bpf/Makefile
-index a9a147e18600..25f40588dfbf 100644
+index 6961ff400cba..bdc8cd1b6767 100644
 --- a/kernel/bpf/Makefile
 +++ b/kernel/bpf/Makefile
 @@ -5,6 +5,7 @@ CFLAGS_core.o += $(call cc-disable-warning, override-init)
@@ -440,10 +440,10 @@ index 000000000000..d5454528423c
 +	.btf_id		= bpf_inode_storage_btf_ids,
 +};
 diff --git a/kernel/bpf/syscall.c b/kernel/bpf/syscall.c
-index 86299a292214..9836a6ec0b77 100644
+index b46e973faee9..5443cea86cef 100644
 --- a/kernel/bpf/syscall.c
 +++ b/kernel/bpf/syscall.c
-@@ -768,7 +768,8 @@ static int map_check_btf(struct bpf_map *map, const struct btf *btf,
+@@ -769,7 +769,8 @@ static int map_check_btf(struct bpf_map *map, const struct btf *btf,
  		if (map->map_type != BPF_MAP_TYPE_HASH &&
  		    map->map_type != BPF_MAP_TYPE_ARRAY &&
  		    map->map_type != BPF_MAP_TYPE_CGROUP_STORAGE &&
@@ -454,10 +454,10 @@ index 86299a292214..9836a6ec0b77 100644
  		if (map->spin_lock_off + sizeof(struct bpf_spin_lock) >
  		    map->value_size) {
 diff --git a/kernel/bpf/verifier.c b/kernel/bpf/verifier.c
-index ef938f17b944..da933ec72c00 100644
+index dd24503ab3d3..38748794518e 100644
 --- a/kernel/bpf/verifier.c
 +++ b/kernel/bpf/verifier.c
-@@ -4242,6 +4242,11 @@ static int check_map_func_compatibility(struct bpf_verifier_env *env,
+@@ -4311,6 +4311,11 @@ static int check_map_func_compatibility(struct bpf_verifier_env *env,
  		    func_id != BPF_FUNC_sk_storage_delete)
  			goto error;
  		break;
@@ -469,7 +469,7 @@ index ef938f17b944..da933ec72c00 100644
  	default:
  		break;
  	}
-@@ -4315,6 +4320,11 @@ static int check_map_func_compatibility(struct bpf_verifier_env *env,
+@@ -4384,6 +4389,11 @@ static int check_map_func_compatibility(struct bpf_verifier_env *env,
  		if (map->map_type != BPF_MAP_TYPE_SK_STORAGE)
  			goto error;
  		break;
@@ -563,7 +563,7 @@ index 3a27d31a1856..bc0071228f88 100644
  		"",
  		bin_name, argv[-2]);
 diff --git a/tools/include/uapi/linux/bpf.h b/tools/include/uapi/linux/bpf.h
-index e33a06f7164d..c6575e25ef46 100644
+index f1a4a476586b..b0504ab59a2e 100644
 --- a/tools/include/uapi/linux/bpf.h
 +++ b/tools/include/uapi/linux/bpf.h
 @@ -155,6 +155,7 @@ enum bpf_map_type {
