@@ -1,4 +1,4 @@
-From ad339c62734d7789142a4fd9fcc0ca0ce08e0714 Mon Sep 17 00:00:00 2001
+From 28bdbfdbd81ae34e3fd07d59cc9f5f22a5b6763f Mon Sep 17 00:00:00 2001
 From: KP Singh <kpsingh@google.com>
 Date: Tue, 14 Jul 2020 22:48:43 +0200
 Subject: [PATCH bpf-next v9 4/7] bpf: Split bpf_local_storage to
@@ -14,9 +14,9 @@ Signed-off-by: KP Singh <kpsingh@google.com>
  include/linux/bpf_local_storage.h | 163 ++++++++
  include/net/bpf_sk_storage.h      |  61 +--
  kernel/bpf/Makefile               |   1 +
- kernel/bpf/bpf_local_storage.c    | 601 ++++++++++++++++++++++++++
- net/core/bpf_sk_storage.c         | 673 +-----------------------------
- 5 files changed, 767 insertions(+), 732 deletions(-)
+ kernel/bpf/bpf_local_storage.c    | 600 ++++++++++++++++++++++++++
+ net/core/bpf_sk_storage.c         | 672 +-----------------------------
+ 5 files changed, 766 insertions(+), 731 deletions(-)
  create mode 100644 include/linux/bpf_local_storage.h
  create mode 100644 kernel/bpf/bpf_local_storage.c
 
@@ -282,10 +282,10 @@ index 19e137aae40e..6961ff400cba 100644
  endif
 diff --git a/kernel/bpf/bpf_local_storage.c b/kernel/bpf/bpf_local_storage.c
 new file mode 100644
-index 000000000000..eb2ab65a71e8
+index 000000000000..54894c7f02ba
 --- /dev/null
 +++ b/kernel/bpf/bpf_local_storage.c
-@@ -0,0 +1,601 @@
+@@ -0,0 +1,600 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/* Copyright (c) 2019 Facebook  */
 +#include <linux/rculist.h>
@@ -793,14 +793,13 @@ index 000000000000..eb2ab65a71e8
 +	 *
 +	 * e.g. when bpf_sk_storage_free() has unlinked selem from the map
 +	 * which then made the above while((selem = ...)) loop
-+	 * exited immediately.
++	 * exit immediately.
 +	 *
-+	 * However, the bpf_local_storage_free() still needs to access
-+	 * the smap->elem_size to do the uncharging in
++	 * However, while freeing the storage one still needs to access the
++	 * smap->elem_size to do the uncharging in
 +	 * bpf_selem_unlink_storage_nolock().
 +	 *
-+	 * Hence, wait another rcu grace period for the
-+	 * bpf_local_storage_free() to finish.
++	 * Hence, wait another rcu grace period for the the storage to be freed.
 +	 */
 +	synchronize_rcu();
 +
@@ -888,7 +887,7 @@ index 000000000000..eb2ab65a71e8
 +	return 0;
 +}
 diff --git a/net/core/bpf_sk_storage.c b/net/core/bpf_sk_storage.c
-index 128932eedf7a..f29d9a9b4ea4 100644
+index 5ecd3034c4c6..f29d9a9b4ea4 100644
 --- a/net/core/bpf_sk_storage.c
 +++ b/net/core/bpf_sk_storage.c
 @@ -7,97 +7,14 @@
@@ -1456,7 +1455,7 @@ index 128932eedf7a..f29d9a9b4ea4 100644
  /* Called by __sk_destruct() & bpf_sk_storage_clone() */
  void bpf_sk_storage_free(struct sock *sk)
  {
-@@ -622,60 +94,6 @@ void bpf_sk_storage_free(struct sock *sk)
+@@ -622,59 +94,6 @@ void bpf_sk_storage_free(struct sock *sk)
  		kfree_rcu(sk_storage, rcu);
  }
  
@@ -1499,14 +1498,13 @@ index 128932eedf7a..f29d9a9b4ea4 100644
 -	 *
 -	 * e.g. when bpf_sk_storage_free() has unlinked selem from the map
 -	 * which then made the above while((selem = ...)) loop
--	 * exited immediately.
+-	 * exit immediately.
 -	 *
--	 * However, the bpf_local_storage_free() still needs to access
--	 * the smap->elem_size to do the uncharging in
+-	 * However, while freeing the storage one still needs to access the
+-	 * smap->elem_size to do the uncharging in
 -	 * bpf_selem_unlink_storage_nolock().
 -	 *
--	 * Hence, wait another rcu grace period for the
--	 * bpf_local_storage_free() to finish.
+-	 * Hence, wait another rcu grace period for the the storage to be freed.
 -	 */
 -	synchronize_rcu();
 -
@@ -1517,7 +1515,7 @@ index 128932eedf7a..f29d9a9b4ea4 100644
  static void sk_storage_map_free(struct bpf_map *map)
  {
  	struct bpf_local_storage_map *smap;
-@@ -685,78 +103,6 @@ static void sk_storage_map_free(struct bpf_map *map)
+@@ -684,78 +103,6 @@ static void sk_storage_map_free(struct bpf_map *map)
  	bpf_local_storage_map_free(smap);
  }
  
@@ -1596,7 +1594,7 @@ index 128932eedf7a..f29d9a9b4ea4 100644
  static struct bpf_map *sk_storage_map_alloc(union bpf_attr *attr)
  {
  	struct bpf_local_storage_map *smap;
-@@ -775,23 +121,6 @@ static int notsupp_get_next_key(struct bpf_map *map, void *key,
+@@ -774,23 +121,6 @@ static int notsupp_get_next_key(struct bpf_map *map, void *key,
  	return -ENOTSUPP;
  }
  

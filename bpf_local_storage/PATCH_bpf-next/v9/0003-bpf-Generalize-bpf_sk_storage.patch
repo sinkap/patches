@@ -1,4 +1,4 @@
-From 85a7f98bd04cc7c7fe9ca32ee0d56d0b127896be Mon Sep 17 00:00:00 2001
+From 9e382d5231ff6e9b90e71b2e51515cd21beb19fd Mon Sep 17 00:00:00 2001
 From: KP Singh <kpsingh@google.com>
 Date: Fri, 24 Jul 2020 18:30:47 -0700
 Subject: [PATCH bpf-next v9 3/7] bpf: Generalize bpf_sk_storage
@@ -27,11 +27,11 @@ Co-developed-by: Martin KaFai Lau <kafai@fb.com>
 Signed-off-by: KP Singh <kpsingh@google.com>
 ---
  include/linux/bpf.h            |   8 ++
- include/net/bpf_sk_storage.h   |  52 +++++++
+ include/net/bpf_sk_storage.h   |  52 ++++++++
  include/uapi/linux/bpf.h       |   8 +-
- net/core/bpf_sk_storage.c      | 238 +++++++++++++++++++++------------
+ net/core/bpf_sk_storage.c      | 232 ++++++++++++++++++++++-----------
  tools/include/uapi/linux/bpf.h |   8 +-
- 5 files changed, 228 insertions(+), 86 deletions(-)
+ 5 files changed, 225 insertions(+), 83 deletions(-)
 
 diff --git a/include/linux/bpf.h b/include/linux/bpf.h
 index 81f38e2fda78..8c443b93ac11 100644
@@ -159,7 +159,7 @@ index a1bbaff7a0af..f1a4a476586b 100644
  
  /* BPF_FUNC_read_branch_records flags. */
 diff --git a/net/core/bpf_sk_storage.c b/net/core/bpf_sk_storage.c
-index b783c8cfeddd..128932eedf7a 100644
+index b3f1dc20057e..5ecd3034c4c6 100644
 --- a/net/core/bpf_sk_storage.c
 +++ b/net/core/bpf_sk_storage.c
 @@ -84,7 +84,7 @@ struct bpf_local_storage_elem {
@@ -431,8 +431,7 @@ index b783c8cfeddd..128932eedf7a 100644
 -	local_storage = rcu_dereference(sk->sk_bpf_storage);
 +	local_storage = rcu_dereference(*owner_storage(smap, owner));
  	if (!local_storage || hlist_empty(&local_storage->list)) {
--		/* Very first elem for this object */
-+		/* Very first elem for the owner */
+ 		/* Very first elem for the owner */
  		err = check_flags(NULL, map_flags);
  		if (err)
  			return ERR_PTR(err);
@@ -489,19 +488,7 @@ index b783c8cfeddd..128932eedf7a 100644
  	/* Note that this map might be concurrently cloned from
  	 * bpf_sk_storage_clone. Wait for any existing bpf_sk_storage_clone
  	 * RCU read section to finish before proceeding. New RCU
-@@ -637,17 +663,26 @@ static void bpf_local_storage_map_free(struct bpf_map *map)
- 	 * which then made the above while((selem = ...)) loop
- 	 * exited immediately.
- 	 *
--	 * However, the bpf_sk_storage_free() still needs to access
-+	 * However, the bpf_local_storage_free() still needs to access
- 	 * the smap->elem_size to do the uncharging in
- 	 * bpf_selem_unlink_storage_nolock().
- 	 *
- 	 * Hence, wait another rcu grace period for the
--	 * bpf_sk_storage_free() to finish.
-+	 * bpf_local_storage_free() to finish.
- 	 */
+@@ -646,7 +672,16 @@ static void bpf_local_storage_map_free(struct bpf_map *map)
  	synchronize_rcu();
  
  	kvfree(smap->buckets);
@@ -519,7 +506,7 @@ index b783c8cfeddd..128932eedf7a 100644
  }
  
  /* U16_MAX is much more than enough for sk local storage
-@@ -659,7 +694,7 @@ static void bpf_local_storage_map_free(struct bpf_map *map)
+@@ -658,7 +693,7 @@ static void bpf_local_storage_map_free(struct bpf_map *map)
  	       sizeof(struct bpf_local_storage_elem)),			\
  	      (U16_MAX - sizeof(struct bpf_local_storage_elem)))
  
@@ -528,7 +515,7 @@ index b783c8cfeddd..128932eedf7a 100644
  {
  	if (attr->map_flags & ~BPF_LOCAL_STORAGE_CREATE_FLAG_MASK ||
  	    !(attr->map_flags & BPF_F_NO_PREALLOC) ||
-@@ -678,7 +713,7 @@ static int bpf_local_storage_map_alloc_check(union bpf_attr *attr)
+@@ -677,7 +712,7 @@ static int bpf_local_storage_map_alloc_check(union bpf_attr *attr)
  	return 0;
  }
  
@@ -537,7 +524,7 @@ index b783c8cfeddd..128932eedf7a 100644
  {
  	struct bpf_local_storage_map *smap;
  	unsigned int i;
-@@ -718,8 +753,19 @@ static struct bpf_map *bpf_local_storage_map_alloc(union bpf_attr *attr)
+@@ -717,8 +752,19 @@ static struct bpf_map *bpf_local_storage_map_alloc(union bpf_attr *attr)
  
  	smap->elem_size =
  		sizeof(struct bpf_local_storage_elem) + attr->value_size;
@@ -558,7 +545,7 @@ index b783c8cfeddd..128932eedf7a 100644
  	return &smap->map;
  }
  
-@@ -729,10 +775,10 @@ static int notsupp_get_next_key(struct bpf_map *map, void *key,
+@@ -728,10 +774,10 @@ static int notsupp_get_next_key(struct bpf_map *map, void *key,
  	return -ENOTSUPP;
  }
  
@@ -573,7 +560,7 @@ index b783c8cfeddd..128932eedf7a 100644
  {
  	u32 int_data;
  
-@@ -773,8 +819,9 @@ static int bpf_fd_sk_storage_update_elem(struct bpf_map *map, void *key,
+@@ -772,8 +818,9 @@ static int bpf_fd_sk_storage_update_elem(struct bpf_map *map, void *key,
  	fd = *(int *)key;
  	sock = sockfd_lookup(fd, &err);
  	if (sock) {
@@ -585,7 +572,7 @@ index b783c8cfeddd..128932eedf7a 100644
  		sockfd_put(sock);
  		return PTR_ERR_OR_ZERO(sdata);
  	}
-@@ -863,7 +910,7 @@ int bpf_sk_storage_clone(const struct sock *sk, struct sock *newsk)
+@@ -862,7 +909,7 @@ int bpf_sk_storage_clone(const struct sock *sk, struct sock *newsk)
  			bpf_selem_link_map(smap, copy_selem);
  			bpf_selem_link_storage_nolock(new_sk_storage, copy_selem);
  		} else {
@@ -594,7 +581,7 @@ index b783c8cfeddd..128932eedf7a 100644
  			if (ret) {
  				kfree(copy_selem);
  				atomic_sub(smap->elem_size,
-@@ -907,7 +954,9 @@ BPF_CALL_4(bpf_sk_storage_get, struct bpf_map *, map, struct sock *, sk,
+@@ -906,7 +953,9 @@ BPF_CALL_4(bpf_sk_storage_get, struct bpf_map *, map, struct sock *, sk,
  	     *  destruction).
  	     */
  	    refcount_inc_not_zero(&sk->sk_refcnt)) {
@@ -605,7 +592,7 @@ index b783c8cfeddd..128932eedf7a 100644
  		/* sk must be a fullsock (guaranteed by verifier),
  		 * so sock_gen_put() is unnecessary.
  		 */
-@@ -932,11 +981,33 @@ BPF_CALL_2(bpf_sk_storage_delete, struct bpf_map *, map, struct sock *, sk)
+@@ -931,11 +980,33 @@ BPF_CALL_2(bpf_sk_storage_delete, struct bpf_map *, map, struct sock *, sk)
  	return -ENOENT;
  }
  
@@ -641,7 +628,7 @@ index b783c8cfeddd..128932eedf7a 100644
  	.map_get_next_key = notsupp_get_next_key,
  	.map_lookup_elem = bpf_fd_sk_storage_lookup_elem,
  	.map_update_elem = bpf_fd_sk_storage_update_elem,
-@@ -944,6 +1015,9 @@ const struct bpf_map_ops sk_storage_map_ops = {
+@@ -943,6 +1014,9 @@ const struct bpf_map_ops sk_storage_map_ops = {
  	.map_check_btf = bpf_local_storage_map_check_btf,
  	.map_btf_name = "bpf_local_storage_map",
  	.map_btf_id = &sk_storage_map_btf_id,

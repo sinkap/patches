@@ -1,4 +1,4 @@
-From dd4b3fa7d2fd936564ac57e59131b1d3ca2cbe01 Mon Sep 17 00:00:00 2001
+From cc2e5d5058b1b552448eb1e9ae0618f1e50f8a57 Mon Sep 17 00:00:00 2001
 From: KP Singh <kpsingh@google.com>
 Date: Tue, 14 Jul 2020 12:44:21 +0200
 Subject: [PATCH bpf-next v9 1/7] bpf: Renames in preparation for
@@ -41,8 +41,8 @@ Functions:
 Signed-off-by: KP Singh <kpsingh@google.com>
 ---
  include/net/sock.h        |   4 +-
- net/core/bpf_sk_storage.c | 479 ++++++++++++++++++++------------------
- 2 files changed, 248 insertions(+), 235 deletions(-)
+ net/core/bpf_sk_storage.c | 488 +++++++++++++++++++-------------------
+ 2 files changed, 252 insertions(+), 240 deletions(-)
 
 diff --git a/include/net/sock.h b/include/net/sock.h
 index 064637d1ddf6..18423cc9cde8 100644
@@ -67,7 +67,7 @@ index 064637d1ddf6..18423cc9cde8 100644
  	struct rcu_head		sk_rcu;
  };
 diff --git a/net/core/bpf_sk_storage.c b/net/core/bpf_sk_storage.c
-index 281200dc0a01..b21d2956c161 100644
+index 281200dc0a01..d52f85cb41c7 100644
 --- a/net/core/bpf_sk_storage.c
 +++ b/net/core/bpf_sk_storage.c
 @@ -12,33 +12,32 @@
@@ -542,7 +542,7 @@ index 281200dc0a01..b21d2956c161 100644
 +	smap = (struct bpf_local_storage_map *)map;
 +	local_storage = rcu_dereference(sk->sk_bpf_storage);
 +	if (!local_storage || hlist_empty(&local_storage->list)) {
-+		/* Very first elem for this object */
++		/* Very first elem for the owner */
  		err = check_flags(NULL, map_flags);
  		if (err)
  			return ERR_PTR(err);
@@ -734,7 +734,7 @@ index 281200dc0a01..b21d2956c161 100644
  	 * by bpf_sk_storage_free() during __sk_destruct().
  	 */
  	for (i = 0; i < (1U << smap->bucket_log); i++) {
-@@ -615,23 +623,24 @@ static void bpf_sk_storage_map_free(struct bpf_map *map)
+@@ -615,26 +623,26 @@ static void bpf_sk_storage_map_free(struct bpf_map *map)
  
  		rcu_read_lock();
  		/* No one is adding to b->list now */
@@ -757,16 +757,23 @@ index 281200dc0a01..b21d2956c161 100644
 +	 *
 +	 * e.g. when bpf_sk_storage_free() has unlinked selem from the map
  	 * which then made the above while((selem = ...)) loop
- 	 * exited immediately.
+-	 * exited immediately.
++	 * exit immediately.
  	 *
- 	 * However, the bpf_sk_storage_free() still needs to access
- 	 * the smap->elem_size to do the uncharging in
+-	 * However, the bpf_sk_storage_free() still needs to access
+-	 * the smap->elem_size to do the uncharging in
 -	 * __selem_unlink_sk().
++	 * However, while freeing the storage one still needs to access the
++	 * smap->elem_size to do the uncharging in
 +	 * bpf_selem_unlink_storage_nolock().
  	 *
- 	 * Hence, wait another rcu grace period for the
- 	 * bpf_sk_storage_free() to finish.
-@@ -645,14 +654,15 @@ static void bpf_sk_storage_map_free(struct bpf_map *map)
+-	 * Hence, wait another rcu grace period for the
+-	 * bpf_sk_storage_free() to finish.
++	 * Hence, wait another rcu grace period for the the storage to be freed.
+ 	 */
+ 	synchronize_rcu();
+ 
+@@ -645,14 +653,15 @@ static void bpf_sk_storage_map_free(struct bpf_map *map)
  /* U16_MAX is much more than enough for sk local storage
   * considering a tcp_sock is ~2k.
   */
@@ -787,7 +794,7 @@ index 281200dc0a01..b21d2956c161 100644
  	    !(attr->map_flags & BPF_F_NO_PREALLOC) ||
  	    attr->max_entries ||
  	    attr->key_size != sizeof(int) || !attr->value_size ||
-@@ -663,15 +673,15 @@ static int bpf_sk_storage_map_alloc_check(union bpf_attr *attr)
+@@ -663,15 +672,15 @@ static int bpf_sk_storage_map_alloc_check(union bpf_attr *attr)
  	if (!bpf_capable())
  		return -EPERM;
  
@@ -806,7 +813,7 @@ index 281200dc0a01..b21d2956c161 100644
  	unsigned int i;
  	u32 nbuckets;
  	u64 cost;
-@@ -707,7 +717,8 @@ static struct bpf_map *bpf_sk_storage_map_alloc(union bpf_attr *attr)
+@@ -707,7 +716,8 @@ static struct bpf_map *bpf_sk_storage_map_alloc(union bpf_attr *attr)
  		raw_spin_lock_init(&smap->buckets[i].lock);
  	}
  
@@ -816,7 +823,7 @@ index 281200dc0a01..b21d2956c161 100644
  	smap->cache_idx = cache_idx_get();
  
  	return &smap->map;
-@@ -719,10 +730,10 @@ static int notsupp_get_next_key(struct bpf_map *map, void *key,
+@@ -719,10 +729,10 @@ static int notsupp_get_next_key(struct bpf_map *map, void *key,
  	return -ENOTSUPP;
  }
  
@@ -831,7 +838,7 @@ index 281200dc0a01..b21d2956c161 100644
  {
  	u32 int_data;
  
-@@ -738,7 +749,7 @@ static int bpf_sk_storage_map_check_btf(const struct bpf_map *map,
+@@ -738,7 +748,7 @@ static int bpf_sk_storage_map_check_btf(const struct bpf_map *map,
  
  static void *bpf_fd_sk_storage_lookup_elem(struct bpf_map *map, void *key)
  {
@@ -840,7 +847,7 @@ index 281200dc0a01..b21d2956c161 100644
  	struct socket *sock;
  	int fd, err;
  
-@@ -756,14 +767,15 @@ static void *bpf_fd_sk_storage_lookup_elem(struct bpf_map *map, void *key)
+@@ -756,14 +766,15 @@ static void *bpf_fd_sk_storage_lookup_elem(struct bpf_map *map, void *key)
  static int bpf_fd_sk_storage_update_elem(struct bpf_map *map, void *key,
  					 void *value, u64 map_flags)
  {
@@ -858,7 +865,7 @@ index 281200dc0a01..b21d2956c161 100644
  		sockfd_put(sock);
  		return PTR_ERR_OR_ZERO(sdata);
  	}
-@@ -787,14 +799,14 @@ static int bpf_fd_sk_storage_delete_elem(struct bpf_map *map, void *key)
+@@ -787,14 +798,14 @@ static int bpf_fd_sk_storage_delete_elem(struct bpf_map *map, void *key)
  	return err;
  }
  
@@ -878,7 +885,7 @@ index 281200dc0a01..b21d2956c161 100644
  	if (!copy_selem)
  		return NULL;
  
-@@ -810,9 +822,9 @@ bpf_sk_storage_clone_elem(struct sock *newsk,
+@@ -810,9 +821,9 @@ bpf_sk_storage_clone_elem(struct sock *newsk,
  
  int bpf_sk_storage_clone(const struct sock *sk, struct sock *newsk)
  {
@@ -891,7 +898,7 @@ index 281200dc0a01..b21d2956c161 100644
  	int ret = 0;
  
  	RCU_INIT_POINTER(newsk->sk_bpf_storage, NULL);
-@@ -824,8 +836,8 @@ int bpf_sk_storage_clone(const struct sock *sk, struct sock *newsk)
+@@ -824,8 +835,8 @@ int bpf_sk_storage_clone(const struct sock *sk, struct sock *newsk)
  		goto out;
  
  	hlist_for_each_entry_rcu(selem, &sk_storage->list, snode) {
@@ -902,7 +909,7 @@ index 281200dc0a01..b21d2956c161 100644
  		struct bpf_map *map;
  
  		smap = rcu_dereference(SDATA(selem)->smap);
-@@ -833,7 +845,7 @@ int bpf_sk_storage_clone(const struct sock *sk, struct sock *newsk)
+@@ -833,7 +844,7 @@ int bpf_sk_storage_clone(const struct sock *sk, struct sock *newsk)
  			continue;
  
  		/* Note that for lockless listeners adding new element
@@ -911,7 +918,7 @@ index 281200dc0a01..b21d2956c161 100644
  		 * Try to grab map refcnt to make sure that it's still
  		 * alive and prevent concurrent removal.
  		 */
-@@ -849,8 +861,8 @@ int bpf_sk_storage_clone(const struct sock *sk, struct sock *newsk)
+@@ -849,8 +860,8 @@ int bpf_sk_storage_clone(const struct sock *sk, struct sock *newsk)
  		}
  
  		if (new_sk_storage) {
@@ -922,7 +929,7 @@ index 281200dc0a01..b21d2956c161 100644
  		} else {
  			ret = sk_storage_alloc(newsk, smap, copy_selem);
  			if (ret) {
-@@ -861,7 +873,8 @@ int bpf_sk_storage_clone(const struct sock *sk, struct sock *newsk)
+@@ -861,7 +872,8 @@ int bpf_sk_storage_clone(const struct sock *sk, struct sock *newsk)
  				goto out;
  			}
  
@@ -932,7 +939,7 @@ index 281200dc0a01..b21d2956c161 100644
  		}
  		bpf_map_put(map);
  	}
-@@ -879,7 +892,7 @@ int bpf_sk_storage_clone(const struct sock *sk, struct sock *newsk)
+@@ -879,7 +891,7 @@ int bpf_sk_storage_clone(const struct sock *sk, struct sock *newsk)
  BPF_CALL_4(bpf_sk_storage_get, struct bpf_map *, map, struct sock *, sk,
  	   void *, value, u64, flags)
  {
@@ -941,7 +948,7 @@ index 281200dc0a01..b21d2956c161 100644
  
  	if (flags > BPF_SK_STORAGE_GET_F_CREATE)
  		return (unsigned long)NULL;
-@@ -895,7 +908,7 @@ BPF_CALL_4(bpf_sk_storage_get, struct bpf_map *, map, struct sock *, sk,
+@@ -895,7 +907,7 @@ BPF_CALL_4(bpf_sk_storage_get, struct bpf_map *, map, struct sock *, sk,
  	     *  destruction).
  	     */
  	    refcount_inc_not_zero(&sk->sk_refcnt)) {
@@ -950,7 +957,7 @@ index 281200dc0a01..b21d2956c161 100644
  		/* sk must be a fullsock (guaranteed by verifier),
  		 * so sock_gen_put() is unnecessary.
  		 */
-@@ -922,15 +935,15 @@ BPF_CALL_2(bpf_sk_storage_delete, struct bpf_map *, map, struct sock *, sk)
+@@ -922,15 +934,15 @@ BPF_CALL_2(bpf_sk_storage_delete, struct bpf_map *, map, struct sock *, sk)
  
  static int sk_storage_map_btf_id;
  const struct bpf_map_ops sk_storage_map_ops = {
@@ -971,7 +978,7 @@ index 281200dc0a01..b21d2956c161 100644
  	.map_btf_id = &sk_storage_map_btf_id,
  };
  
-@@ -1022,7 +1035,7 @@ bpf_sk_storage_diag_alloc(const struct nlattr *nla_stgs)
+@@ -1022,7 +1034,7 @@ bpf_sk_storage_diag_alloc(const struct nlattr *nla_stgs)
  	u32 nr_maps = 0;
  	int rem, err;
  
@@ -980,7 +987,7 @@ index 281200dc0a01..b21d2956c161 100644
  	 * the map_alloc_check() side also does.
  	 */
  	if (!bpf_capable())
-@@ -1072,13 +1085,13 @@ bpf_sk_storage_diag_alloc(const struct nlattr *nla_stgs)
+@@ -1072,13 +1084,13 @@ bpf_sk_storage_diag_alloc(const struct nlattr *nla_stgs)
  }
  EXPORT_SYMBOL_GPL(bpf_sk_storage_diag_alloc);
  
@@ -997,7 +1004,7 @@ index 281200dc0a01..b21d2956c161 100644
  
  	nla_stg = nla_nest_start(skb, SK_DIAG_BPF_STORAGE);
  	if (!nla_stg)
-@@ -1114,9 +1127,9 @@ static int bpf_sk_storage_diag_put_all(struct sock *sk, struct sk_buff *skb,
+@@ -1114,9 +1126,9 @@ static int bpf_sk_storage_diag_put_all(struct sock *sk, struct sk_buff *skb,
  {
  	/* stg_array_type (e.g. INET_DIAG_BPF_SK_STORAGES) */
  	unsigned int diag_size = nla_total_size(0);
@@ -1010,7 +1017,7 @@ index 281200dc0a01..b21d2956c161 100644
  	struct nlattr *nla_stgs;
  	unsigned int saved_len;
  	int err = 0;
-@@ -1169,8 +1182,8 @@ int bpf_sk_storage_diag_put(struct bpf_sk_storage_diag *diag,
+@@ -1169,8 +1181,8 @@ int bpf_sk_storage_diag_put(struct bpf_sk_storage_diag *diag,
  {
  	/* stg_array_type (e.g. INET_DIAG_BPF_SK_STORAGES) */
  	unsigned int diag_size = nla_total_size(0);
@@ -1021,7 +1028,7 @@ index 281200dc0a01..b21d2956c161 100644
  	struct nlattr *nla_stgs;
  	unsigned int saved_len;
  	int err = 0;
-@@ -1197,8 +1210,8 @@ int bpf_sk_storage_diag_put(struct bpf_sk_storage_diag *diag,
+@@ -1197,8 +1209,8 @@ int bpf_sk_storage_diag_put(struct bpf_sk_storage_diag *diag,
  
  	saved_len = skb->len;
  	for (i = 0; i < diag->nr_maps; i++) {
@@ -1032,7 +1039,7 @@ index 281200dc0a01..b21d2956c161 100644
  				false);
  
  		if (!sdata)
-@@ -1235,19 +1248,19 @@ struct bpf_iter_seq_sk_storage_map_info {
+@@ -1235,19 +1247,19 @@ struct bpf_iter_seq_sk_storage_map_info {
  	unsigned skip_elems;
  };
  
@@ -1059,7 +1066,7 @@ index 281200dc0a01..b21d2956c161 100644
  	n_buckets = 1U << smap->bucket_log;
  	if (bucket_id >= n_buckets)
  		return NULL;
-@@ -1257,7 +1270,7 @@ bpf_sk_storage_map_seq_find_next(struct bpf_iter_seq_sk_storage_map_info *info,
+@@ -1257,7 +1269,7 @@ bpf_sk_storage_map_seq_find_next(struct bpf_iter_seq_sk_storage_map_info *info,
  	count = 0;
  	while (selem) {
  		selem = hlist_entry_safe(selem->map_node.next,
@@ -1068,7 +1075,7 @@ index 281200dc0a01..b21d2956c161 100644
  		if (!selem) {
  			/* not found, unlock and go to the next bucket */
  			b = &smap->buckets[bucket_id++];
-@@ -1265,7 +1278,7 @@ bpf_sk_storage_map_seq_find_next(struct bpf_iter_seq_sk_storage_map_info *info,
+@@ -1265,7 +1277,7 @@ bpf_sk_storage_map_seq_find_next(struct bpf_iter_seq_sk_storage_map_info *info,
  			skip_elems = 0;
  			break;
  		}
@@ -1077,7 +1084,7 @@ index 281200dc0a01..b21d2956c161 100644
  		if (sk_storage) {
  			info->skip_elems = skip_elems + count;
  			return selem;
-@@ -1278,7 +1291,7 @@ bpf_sk_storage_map_seq_find_next(struct bpf_iter_seq_sk_storage_map_info *info,
+@@ -1278,7 +1290,7 @@ bpf_sk_storage_map_seq_find_next(struct bpf_iter_seq_sk_storage_map_info *info,
  		raw_spin_lock_bh(&b->lock);
  		count = 0;
  		hlist_for_each_entry(selem, &b->list, map_node) {
@@ -1086,7 +1093,7 @@ index 281200dc0a01..b21d2956c161 100644
  			if (sk_storage && count >= skip_elems) {
  				info->bucket_id = i;
  				info->skip_elems = count;
-@@ -1297,7 +1310,7 @@ bpf_sk_storage_map_seq_find_next(struct bpf_iter_seq_sk_storage_map_info *info,
+@@ -1297,7 +1309,7 @@ bpf_sk_storage_map_seq_find_next(struct bpf_iter_seq_sk_storage_map_info *info,
  
  static void *bpf_sk_storage_map_seq_start(struct seq_file *seq, loff_t *pos)
  {
@@ -1095,7 +1102,7 @@ index 281200dc0a01..b21d2956c161 100644
  
  	selem = bpf_sk_storage_map_seq_find_next(seq->private, NULL);
  	if (!selem)
-@@ -1330,11 +1343,11 @@ DEFINE_BPF_ITER_FUNC(bpf_sk_storage_map, struct bpf_iter_meta *meta,
+@@ -1330,11 +1342,11 @@ DEFINE_BPF_ITER_FUNC(bpf_sk_storage_map, struct bpf_iter_meta *meta,
  		     void *value)
  
  static int __bpf_sk_storage_map_seq_show(struct seq_file *seq,
@@ -1109,7 +1116,7 @@ index 281200dc0a01..b21d2956c161 100644
  	struct bpf_iter_meta meta;
  	struct bpf_prog *prog;
  	int ret = 0;
-@@ -1345,8 +1358,8 @@ static int __bpf_sk_storage_map_seq_show(struct seq_file *seq,
+@@ -1345,8 +1357,8 @@ static int __bpf_sk_storage_map_seq_show(struct seq_file *seq,
  		ctx.meta = &meta;
  		ctx.map = info->map;
  		if (selem) {
@@ -1120,7 +1127,7 @@ index 281200dc0a01..b21d2956c161 100644
  			ctx.value = SDATA(selem)->data;
  		}
  		ret = bpf_iter_run_prog(prog, &ctx);
-@@ -1363,13 +1376,13 @@ static int bpf_sk_storage_map_seq_show(struct seq_file *seq, void *v)
+@@ -1363,13 +1375,13 @@ static int bpf_sk_storage_map_seq_show(struct seq_file *seq, void *v)
  static void bpf_sk_storage_map_seq_stop(struct seq_file *seq, void *v)
  {
  	struct bpf_iter_seq_sk_storage_map_info *info = seq->private;
