@@ -1,4 +1,4 @@
-From cc2e5d5058b1b552448eb1e9ae0618f1e50f8a57 Mon Sep 17 00:00:00 2001
+From 29129438ec4d45e5a3ae34dcac72310bc0ecda99 Mon Sep 17 00:00:00 2001
 From: KP Singh <kpsingh@google.com>
 Date: Tue, 14 Jul 2020 12:44:21 +0200
 Subject: [PATCH bpf-next v9 1/7] bpf: Renames in preparation for
@@ -67,7 +67,7 @@ index 064637d1ddf6..18423cc9cde8 100644
  	struct rcu_head		sk_rcu;
  };
 diff --git a/net/core/bpf_sk_storage.c b/net/core/bpf_sk_storage.c
-index 281200dc0a01..d52f85cb41c7 100644
+index 281200dc0a01..f975e2d01207 100644
 --- a/net/core/bpf_sk_storage.c
 +++ b/net/core/bpf_sk_storage.c
 @@ -12,33 +12,32 @@
@@ -769,7 +769,7 @@ index 281200dc0a01..d52f85cb41c7 100644
  	 *
 -	 * Hence, wait another rcu grace period for the
 -	 * bpf_sk_storage_free() to finish.
-+	 * Hence, wait another rcu grace period for the the storage to be freed.
++	 * Hence, wait another rcu grace period for the storage to be freed.
  	 */
  	synchronize_rcu();
  

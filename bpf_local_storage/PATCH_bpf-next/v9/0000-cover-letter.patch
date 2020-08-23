@@ -1,6 +1,6 @@
-From 11529ac8ae13b90f235e48272cd843cd02380269 Mon Sep 17 00:00:00 2001
+From 57aeed0573f8724785c96186e73a9882d59869ba Mon Sep 17 00:00:00 2001
 From: KP Singh <kpsingh@google.com>
-Date: Sun, 23 Aug 2020 17:56:22 +0200
+Date: Sun, 23 Aug 2020 18:44:25 +0200
 Subject: [PATCH bpf-next v9 0/7] *** SUBJECT HERE ***
 
 *** BLURB HERE ***
@@ -22,7 +22,7 @@ KP Singh (7):
  include/net/sock.h                            |   4 +-
  include/uapi/linux/bpf.h                      |  53 +-
  kernel/bpf/Makefile                           |   2 +
- kernel/bpf/bpf_inode_storage.c                | 266 ++++++
+ kernel/bpf/bpf_inode_storage.c                | 265 ++++++
  kernel/bpf/bpf_local_storage.c                | 600 +++++++++++++
  kernel/bpf/bpf_lsm.c                          |  21 +-
  kernel/bpf/syscall.c                          |   3 +-
@@ -36,7 +36,7 @@ KP Singh (7):
  tools/lib/bpf/libbpf_probes.c                 |   5 +-
  .../bpf/prog_tests/test_local_storage.c       |  60 ++
  .../selftests/bpf/progs/local_storage.c       | 140 +++
- 22 files changed, 1567 insertions(+), 712 deletions(-)
+ 22 files changed, 1566 insertions(+), 712 deletions(-)
  create mode 100644 include/linux/bpf_local_storage.h
  create mode 100644 kernel/bpf/bpf_inode_storage.c
  create mode 100644 kernel/bpf/bpf_local_storage.c

@@ -1,4 +1,4 @@
-From 28bdbfdbd81ae34e3fd07d59cc9f5f22a5b6763f Mon Sep 17 00:00:00 2001
+From c9991bb96f8bca7dd54ed0f85bbfeca4b5c3623d Mon Sep 17 00:00:00 2001
 From: KP Singh <kpsingh@google.com>
 Date: Tue, 14 Jul 2020 22:48:43 +0200
 Subject: [PATCH bpf-next v9 4/7] bpf: Split bpf_local_storage to
@@ -190,7 +190,7 @@ index 000000000000..b2c9463f36a1
 +
 +#endif /* _BPF_LOCAL_STORAGE_H */
 diff --git a/include/net/bpf_sk_storage.h b/include/net/bpf_sk_storage.h
-index 6ab9b63a93a6..3c516dd07caf 100644
+index 9e631b5466e3..3c516dd07caf 100644
 --- a/include/net/bpf_sk_storage.h
 +++ b/include/net/bpf_sk_storage.h
 @@ -12,6 +12,7 @@
@@ -263,7 +263,7 @@ index 6ab9b63a93a6..3c516dd07caf 100644
 -
 -struct bpf_local_storage_data *
 -bpf_local_storage_update(void *owner, struct bpf_local_storage_map *smap,
--			 void *value, u64 map_flags)
+-			 void *value, u64 map_flags);
 -
  #ifdef CONFIG_BPF_SYSCALL
  int bpf_sk_storage_clone(const struct sock *sk, struct sock *newsk);
@@ -282,7 +282,7 @@ index 19e137aae40e..6961ff400cba 100644
  endif
 diff --git a/kernel/bpf/bpf_local_storage.c b/kernel/bpf/bpf_local_storage.c
 new file mode 100644
-index 000000000000..54894c7f02ba
+index 000000000000..ffa7d11fc2bd
 --- /dev/null
 +++ b/kernel/bpf/bpf_local_storage.c
 @@ -0,0 +1,600 @@
@@ -799,7 +799,7 @@ index 000000000000..54894c7f02ba
 +	 * smap->elem_size to do the uncharging in
 +	 * bpf_selem_unlink_storage_nolock().
 +	 *
-+	 * Hence, wait another rcu grace period for the the storage to be freed.
++	 * Hence, wait another rcu grace period for the storage to be freed.
 +	 */
 +	synchronize_rcu();
 +
@@ -887,7 +887,7 @@ index 000000000000..54894c7f02ba
 +	return 0;
 +}
 diff --git a/net/core/bpf_sk_storage.c b/net/core/bpf_sk_storage.c
-index 5ecd3034c4c6..f29d9a9b4ea4 100644
+index cd8b7017913b..f29d9a9b4ea4 100644
 --- a/net/core/bpf_sk_storage.c
 +++ b/net/core/bpf_sk_storage.c
 @@ -7,97 +7,14 @@
@@ -1119,8 +1119,8 @@ index 5ecd3034c4c6..f29d9a9b4ea4 100644
 -	local_storage = rcu_dereference(selem->local_storage);
 -	raw_spin_lock_bh(&local_storage->lock);
 -	if (likely(selem_linked_to_storage(selem)))
--		free_local_storage =
--			bpf_selem_unlink_storage_nolock(local_storage, selem, true);
+-		free_local_storage = bpf_selem_unlink_storage_nolock(
+-			local_storage, selem, true);
 -	raw_spin_unlock_bh(&local_storage->lock);
 -
 -	if (free_local_storage)
@@ -1345,7 +1345,7 @@ index 5ecd3034c4c6..f29d9a9b4ea4 100644
 -		if (err)
 -			return ERR_PTR(err);
 -		if (old_sdata && selem_linked_to_storage(SELEM(old_sdata))) {
--			copy_map_value_locked(map, old_sdata->data,
+-			copy_map_value_locked(&smap->map, old_sdata->data,
 -					      value, false);
 -			return old_sdata;
 -		}
@@ -1504,7 +1504,7 @@ index 5ecd3034c4c6..f29d9a9b4ea4 100644
 -	 * smap->elem_size to do the uncharging in
 -	 * bpf_selem_unlink_storage_nolock().
 -	 *
--	 * Hence, wait another rcu grace period for the the storage to be freed.
+-	 * Hence, wait another rcu grace period for the storage to be freed.
 -	 */
 -	synchronize_rcu();
 -

@@ -1,4 +1,4 @@
-From 9e382d5231ff6e9b90e71b2e51515cd21beb19fd Mon Sep 17 00:00:00 2001
+From 15b0ea303e869cff4c75d6a3b5b5dfcfbda37566 Mon Sep 17 00:00:00 2001
 From: KP Singh <kpsingh@google.com>
 Date: Fri, 24 Jul 2020 18:30:47 -0700
 Subject: [PATCH bpf-next v9 3/7] bpf: Generalize bpf_sk_storage
@@ -27,11 +27,11 @@ Co-developed-by: Martin KaFai Lau <kafai@fb.com>
 Signed-off-by: KP Singh <kpsingh@google.com>
 ---
  include/linux/bpf.h            |   8 ++
- include/net/bpf_sk_storage.h   |  52 ++++++++
+ include/net/bpf_sk_storage.h   |  52 +++++++
  include/uapi/linux/bpf.h       |   8 +-
- net/core/bpf_sk_storage.c      | 232 ++++++++++++++++++++++-----------
+ net/core/bpf_sk_storage.c      | 238 +++++++++++++++++++++------------
  tools/include/uapi/linux/bpf.h |   8 +-
- 5 files changed, 225 insertions(+), 83 deletions(-)
+ 5 files changed, 228 insertions(+), 86 deletions(-)
 
 diff --git a/include/linux/bpf.h b/include/linux/bpf.h
 index 81f38e2fda78..8c443b93ac11 100644
@@ -60,7 +60,7 @@ index 81f38e2fda78..8c443b93ac11 100644
  	const char * const map_btf_name;
  	int *map_btf_id;
 diff --git a/include/net/bpf_sk_storage.h b/include/net/bpf_sk_storage.h
-index 950c5aaba15e..6ab9b63a93a6 100644
+index 950c5aaba15e..9e631b5466e3 100644
 --- a/include/net/bpf_sk_storage.h
 +++ b/include/net/bpf_sk_storage.h
 @@ -3,8 +3,15 @@
@@ -133,7 +133,7 @@ index 950c5aaba15e..6ab9b63a93a6 100644
 +
 +struct bpf_local_storage_data *
 +bpf_local_storage_update(void *owner, struct bpf_local_storage_map *smap,
-+			 void *value, u64 map_flags)
++			 void *value, u64 map_flags);
 +
  #ifdef CONFIG_BPF_SYSCALL
  int bpf_sk_storage_clone(const struct sock *sk, struct sock *newsk);
@@ -159,7 +159,7 @@ index a1bbaff7a0af..f1a4a476586b 100644
  
  /* BPF_FUNC_read_branch_records flags. */
 diff --git a/net/core/bpf_sk_storage.c b/net/core/bpf_sk_storage.c
-index b3f1dc20057e..5ecd3034c4c6 100644
+index ec61ee7c7ee4..cd8b7017913b 100644
 --- a/net/core/bpf_sk_storage.c
 +++ b/net/core/bpf_sk_storage.c
 @@ -84,7 +84,7 @@ struct bpf_local_storage_elem {
@@ -278,7 +278,17 @@ index b3f1dc20057e..5ecd3034c4c6 100644
  
  		/* local_storage is not freed now.  local_storage->lock is
  		 * still held and raw_spin_unlock_bh(&local_storage->lock)
-@@ -217,15 +244,14 @@ static void __bpf_selem_unlink_storage(struct bpf_local_storage_elem *selem)
+@@ -209,23 +236,22 @@ static void __bpf_selem_unlink_storage(struct bpf_local_storage_elem *selem)
+ 	local_storage = rcu_dereference(selem->local_storage);
+ 	raw_spin_lock_bh(&local_storage->lock);
+ 	if (likely(selem_linked_to_storage(selem)))
+-		free_local_storage =
+-			bpf_selem_unlink_storage_nolock(local_storage, selem, true);
++		free_local_storage = bpf_selem_unlink_storage_nolock(
++			local_storage, selem, true);
+ 	raw_spin_unlock_bh(&local_storage->lock);
+ 
+ 	if (free_local_storage)
  		kfree_rcu(local_storage, rcu);
  }
  
@@ -450,6 +460,15 @@ index b3f1dc20057e..5ecd3034c4c6 100644
  			return ERR_PTR(err);
  		}
  
+@@ -439,7 +469,7 @@ bpf_local_storage_update(struct sock *sk, struct bpf_map *map, void *value,
+ 		if (err)
+ 			return ERR_PTR(err);
+ 		if (old_sdata && selem_linked_to_storage(SELEM(old_sdata))) {
+-			copy_map_value_locked(map, old_sdata->data,
++			copy_map_value_locked(&smap->map, old_sdata->data,
+ 					      value, false);
+ 			return old_sdata;
+ 		}
 @@ -464,7 +494,8 @@ bpf_local_storage_update(struct sock *sk, struct bpf_map *map, void *value,
  		goto unlock_err;
  

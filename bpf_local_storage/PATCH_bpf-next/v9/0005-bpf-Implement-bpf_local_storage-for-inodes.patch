@@ -1,4 +1,4 @@
-From 416eb3782e1dd9370d4cd5dcd7be903316db88ea Mon Sep 17 00:00:00 2001
+From c18059da0f0e536d79d69e7bcb74dad6dbf4e282 Mon Sep 17 00:00:00 2001
 From: KP Singh <kpsingh@google.com>
 Date: Mon, 18 May 2020 12:03:20 +0200
 Subject: [PATCH bpf-next v9 5/7] bpf: Implement bpf_local_storage for inodes
@@ -16,7 +16,7 @@ Signed-off-by: KP Singh <kpsingh@google.com>
  include/linux/bpf_types.h                     |   3 +
  include/uapi/linux/bpf.h                      |  38 +++
  kernel/bpf/Makefile                           |   1 +
- kernel/bpf/bpf_inode_storage.c                | 266 ++++++++++++++++++
+ kernel/bpf/bpf_inode_storage.c                | 265 ++++++++++++++++++
  kernel/bpf/syscall.c                          |   3 +-
  kernel/bpf/verifier.c                         |  10 +
  security/bpf/hooks.c                          |   7 +
@@ -25,7 +25,7 @@ Signed-off-by: KP Singh <kpsingh@google.com>
  tools/bpf/bpftool/map.c                       |   3 +-
  tools/include/uapi/linux/bpf.h                |  38 +++
  tools/lib/bpf/libbpf_probes.c                 |   5 +-
- 13 files changed, 402 insertions(+), 6 deletions(-)
+ 13 files changed, 401 insertions(+), 6 deletions(-)
  create mode 100644 kernel/bpf/bpf_inode_storage.c
 
 diff --git a/include/linux/bpf_lsm.h b/include/linux/bpf_lsm.h
@@ -169,10 +169,10 @@ index 6961ff400cba..bdc8cd1b6767 100644
  obj-$(CONFIG_BPF_SYSCALL) += btf.o
 diff --git a/kernel/bpf/bpf_inode_storage.c b/kernel/bpf/bpf_inode_storage.c
 new file mode 100644
-index 000000000000..d5454528423c
+index 000000000000..b0b283c224c1
 --- /dev/null
 +++ b/kernel/bpf/bpf_inode_storage.c
-@@ -0,0 +1,266 @@
+@@ -0,0 +1,265 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Copyright (c) 2019 Facebook
@@ -274,7 +274,6 @@ index 000000000000..d5454528423c
 +	if (free_inode_storage)
 +		kfree_rcu(local_storage, rcu);
 +}
-+
 +
 +static void *bpf_fd_inode_storage_lookup_elem(struct bpf_map *map, void *key)
 +{
