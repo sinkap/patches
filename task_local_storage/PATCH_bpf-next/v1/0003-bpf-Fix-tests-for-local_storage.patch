@@ -1,0 +1,70 @@
+From a8aad292b0a7ac3f50c6a1849be7f98c709d0827 Mon Sep 17 00:00:00 2001
+From: KP Singh <kpsingh@google.com>
+Date: Mon, 19 Oct 2020 18:48:26 +0200
+Subject: [PATCH bpf-next 3/5] bpf: Fix tests for local_storage
+
+The {inode,sk}_storage_result checking if the correct value was retrieved
+was being clobbered unconditionally by the return value of the
+bpf_{inode,sk}_storage_delete call.
+
+Fixes: cd324d7abb3d ("bpf: Add selftests for local_storage")
+Signed-off-by: KP Singh <kpsingh@google.com>
+---
+ .../testing/selftests/bpf/progs/local_storage.c  | 16 +++++++++++-----
+ 1 file changed, 11 insertions(+), 5 deletions(-)
+
+diff --git a/tools/testing/selftests/bpf/progs/local_storage.c b/tools/testing/selftests/bpf/progs/local_storage.c
+index 0758ba229ae0..a3d034eb768e 100644
+--- a/tools/testing/selftests/bpf/progs/local_storage.c
++++ b/tools/testing/selftests/bpf/progs/local_storage.c
+@@ -58,6 +58,7 @@ int BPF_PROG(unlink_hook, struct inode *dir, struct dentry *victim)
+ {
+ 	__u32 pid = bpf_get_current_pid_tgid() >> 32;
+ 	struct dummy_storage *storage;
++	int err;
+ 
+ 	if (pid != monitored_pid)
+ 		return 0;
+@@ -67,11 +68,12 @@ int BPF_PROG(unlink_hook, struct inode *dir, struct dentry *victim)
+ 	if (!storage)
+ 		return 0;
+ 
+-	if (storage->value == DUMMY_STORAGE_VALUE)
++	if (storage->value != DUMMY_STORAGE_VALUE)
+ 		inode_storage_result = -1;
+ 
+-	inode_storage_result =
+-		bpf_inode_storage_delete(&inode_storage_map, victim->d_inode);
++	err = bpf_inode_storage_delete(&inode_storage_map, victim->d_inode);
++	if (!err)
++		inode_storage_result = err;
+ 
+ 	return 0;
+ }
+@@ -82,6 +84,7 @@ int BPF_PROG(socket_bind, struct socket *sock, struct sockaddr *address,
+ {
+ 	__u32 pid = bpf_get_current_pid_tgid() >> 32;
+ 	struct dummy_storage *storage;
++	int err;
+ 
+ 	if (pid != monitored_pid)
+ 		return 0;
+@@ -91,10 +94,13 @@ int BPF_PROG(socket_bind, struct socket *sock, struct sockaddr *address,
+ 	if (!storage)
+ 		return 0;
+ 
+-	if (storage->value == DUMMY_STORAGE_VALUE)
++	if (storage->value != DUMMY_STORAGE_VALUE)
+ 		sk_storage_result = -1;
+ 
+-	sk_storage_result = bpf_sk_storage_delete(&sk_storage_map, sock->sk);
++	err = bpf_sk_storage_delete(&sk_storage_map, sock->sk);
++	if (!err)
++		sk_storage_result = err;
++
+ 	return 0;
+ }
+ 
+-- 
+2.29.0.rc2.309.g374f81d7ae-goog
+
