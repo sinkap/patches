@@ -1,0 +1,65 @@
+From f0d361bcfc9266263dd4ba569ce6ba4521584c72 Mon Sep 17 00:00:00 2001
+From: KP Singh <kpsingh@google.com>
+Date: Tue, 3 Nov 2020 14:28:29 +0000
+Subject: [PATCH bpf-next v3 9/9] bpf: Exercise syscall operations for inode
+ and sk storage
+
+Use the check_syscall_operations added for task_local_storage to
+exercise syscall operations for other local storage maps:
+
+* Check the absence of an element for the given fd.
+* Create a new element, retrieve and compare its value.
+* Delete the element and check again for absence.
+
+Signed-off-by: KP Singh <kpsingh@google.com>
+---
+ .../bpf/prog_tests/test_local_storage.c         | 17 +++++++++++++++--
+ 1 file changed, 15 insertions(+), 2 deletions(-)
+
+diff --git a/tools/testing/selftests/bpf/prog_tests/test_local_storage.c b/tools/testing/selftests/bpf/prog_tests/test_local_storage.c
+index feba23f8848b..48c9237f1314 100644
+--- a/tools/testing/selftests/bpf/prog_tests/test_local_storage.c
++++ b/tools/testing/selftests/bpf/prog_tests/test_local_storage.c
+@@ -145,7 +145,7 @@ bool check_syscall_operations(int map_fd, int obj_fd)
+ void test_test_local_storage(void)
+ {
+ 	char tmp_exec_path[PATH_MAX] = "/tmp/copy_of_rmXXXXXX";
+-	int err, serv_sk = -1, task_fd = -1;
++	int err, serv_sk = -1, task_fd = -1, rm_fd = -1;
+ 	struct local_storage *skel = NULL;
+ 
+ 	skel = local_storage__open_and_load();
+@@ -169,6 +169,15 @@ void test_test_local_storage(void)
+ 	if (CHECK(err < 0, "copy_rm", "err %d errno %d\n", err, errno))
+ 		goto close_prog;
+ 
++	rm_fd = open(tmp_exec_path, O_RDONLY);
++	if (CHECK(rm_fd < 0, "open", "failed to open %s err:%d, errno:%d",
++		  tmp_exec_path, rm_fd, errno))
++		goto close_prog;
++
++	if (!check_syscall_operations(bpf_map__fd(skel->maps.inode_storage_map),
++				      rm_fd))
++		goto close_prog;
++
+ 	/* Sets skel->bss->monitored_pid to the pid of the forked child
+ 	 * forks a child process that executes tmp_exec_path and tries to
+ 	 * unlink its executable. This operation should be denied by the loaded
+@@ -197,9 +206,13 @@ void test_test_local_storage(void)
+ 	CHECK(skel->data->sk_storage_result != 0, "sk_storage_result",
+ 	      "sk_local_storage not set\n");
+ 
+-	close(serv_sk);
++	if (!check_syscall_operations(bpf_map__fd(skel->maps.sk_storage_map),
++				      serv_sk))
++		goto close_prog;
+ 
+ close_prog:
++	close(serv_sk);
++	close(rm_fd);
+ 	close(task_fd);
+ 	local_storage__destroy(skel);
+ }
+-- 
+2.29.1.341.ge80a0c044ae-goog
+
