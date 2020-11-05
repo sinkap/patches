@@ -1,0 +1,58 @@
+From e33912c5205b1c75824f2a18043957f4ed2cd96d Mon Sep 17 00:00:00 2001
+From: KP Singh <kpsingh@google.com>
+Date: Tue, 3 Nov 2020 14:28:29 +0000
+Subject: [PATCH bpf-next v2 8/8] bpf: Exercise syscall operations for inode
+ and sk storage
+
+Signed-off-by: KP Singh <kpsingh@google.com>
+---
+ .../bpf/prog_tests/test_local_storage.c          | 16 +++++++++++++++-
+ 1 file changed, 15 insertions(+), 1 deletion(-)
+
+diff --git a/tools/testing/selftests/bpf/prog_tests/test_local_storage.c b/tools/testing/selftests/bpf/prog_tests/test_local_storage.c
+index feba23f8848b..2e64baabb50d 100644
+--- a/tools/testing/selftests/bpf/prog_tests/test_local_storage.c
++++ b/tools/testing/selftests/bpf/prog_tests/test_local_storage.c
+@@ -145,7 +145,7 @@ bool check_syscall_operations(int map_fd, int obj_fd)
+ void test_test_local_storage(void)
+ {
+ 	char tmp_exec_path[PATH_MAX] = "/tmp/copy_of_rmXXXXXX";
+-	int err, serv_sk = -1, task_fd = -1;
++	int err, serv_sk = -1, task_fd = -1, rm_fd = -1;
+ 	struct local_storage *skel = NULL;
+ 
+ 	skel = local_storage__open_and_load();
+@@ -169,6 +169,15 @@ void test_test_local_storage(void)
+ 	if (CHECK(err < 0, "copy_rm", "err %d errno %d\n", err, errno))
+ 		goto close_prog;
+ 
++	rm_fd = open(tmp_exec_path, O_RDONLY);
++	if (CHECK(rm_fd < 0, "open", "failed to open %s err:%d, errno:%d",
++		  tmp_exec_path, rm_fd, errno))
++		goto close_prog;
++
++	if (!check_syscall_operations(bpf_map__fd(skel->maps.inode_storage_map),
++				      rm_fd))
++		goto close_prog;
++
+ 	/* Sets skel->bss->monitored_pid to the pid of the forked child
+ 	 * forks a child process that executes tmp_exec_path and tries to
+ 	 * unlink its executable. This operation should be denied by the loaded
+@@ -197,9 +206,14 @@ void test_test_local_storage(void)
+ 	CHECK(skel->data->sk_storage_result != 0, "sk_storage_result",
+ 	      "sk_local_storage not set\n");
+ 
++	if (!check_syscall_operations(bpf_map__fd(skel->maps.sk_storage_map),
++				      serv_sk))
++		goto close_prog;
++
+ 	close(serv_sk);
+ 
+ close_prog:
++	close(rm_fd);
+ 	close(task_fd);
+ 	local_storage__destroy(skel);
+ }
+-- 
+2.29.1.341.ge80a0c044ae-goog
+

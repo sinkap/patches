@@ -1,17 +1,7 @@
-From f0d361bcfc9266263dd4ba569ce6ba4521584c72 Mon Sep 17 00:00:00 2001
+From e33912c5205b1c75824f2a18043957f4ed2cd96d Mon Sep 17 00:00:00 2001
 From: KP Singh <kpsingh@google.com>
-Date: Wed, 4 Nov 2020 17:26:58 +0100
-Subject: [PATCH bpf-next v3 0/9] Implement task_local_storage
-
-# v2 -> v3
-
-- Added bpf_spin_locks to the selftests for local storage, found that
-  these are not available for LSM programs.
-- Made spin lock helpers available for LSM programs (except sleepable
-  programs which need more work).
-- Minor fixes for includes and added short commit messages for patches
-  that were split up for libbpf and bpftool.
-- Added Song's acks.
+Date: Tue, 3 Nov 2020 16:11:39 +0100
+Subject: [PATCH bpf-next v2 0/8]  Implement task_local_storage
 
 # v1 -> v2
 
@@ -49,12 +39,11 @@ This patch series:
 
 [1]: https://git.kernel.org/pub/scm/linux/kernel/git/bpf/bpf-next.git/commit/?id=f836a56e84ffc9f1a1cd73f77e10404ca46a4616
 
-KP Singh (9):
+KP Singh (8):
   bpf: Implement task local storage
   libbpf: Add support for task local storage
   bpftool: Add support for task local storage
   bpf: Implement get_current_task_btf and RET_PTR_TO_BTF_ID
-  bpf: Allow LSM programs to use bpf spin locks
   bpf: Fix tests for local_storage
   bpf: Update selftests for local_storage to use vmlinux.h
   bpf: Add tests for task_local_storage
@@ -65,20 +54,20 @@ KP Singh (9):
  include/linux/bpf_types.h                     |   1 +
  include/uapi/linux/bpf.h                      |  48 +++
  kernel/bpf/Makefile                           |   1 +
- kernel/bpf/bpf_lsm.c                          |   8 +
+ kernel/bpf/bpf_lsm.c                          |   4 +
  kernel/bpf/bpf_task_storage.c                 | 313 ++++++++++++++++++
  kernel/bpf/syscall.c                          |   3 +-
- kernel/bpf/verifier.c                         |  34 +-
+ kernel/bpf/verifier.c                         |  17 +-
  kernel/trace/bpf_trace.c                      |  16 +
  security/bpf/hooks.c                          |   2 +
  .../bpf/bpftool/Documentation/bpftool-map.rst |   3 +-
  tools/bpf/bpftool/bash-completion/bpftool     |   2 +-
  tools/bpf/bpftool/map.c                       |   4 +-
  tools/include/uapi/linux/bpf.h                |  48 +++
- tools/lib/bpf/libbpf_probes.c                 |   1 +
- .../bpf/prog_tests/test_local_storage.c       | 182 +++++++++-
- .../selftests/bpf/progs/local_storage.c       | 103 ++++--
- 18 files changed, 741 insertions(+), 52 deletions(-)
+ tools/lib/bpf/libbpf_probes.c                 |   2 +
+ .../bpf/prog_tests/test_local_storage.c       | 181 +++++++++-
+ .../selftests/bpf/progs/local_storage.c       |  87 +++--
+ 18 files changed, 705 insertions(+), 51 deletions(-)
  create mode 100644 kernel/bpf/bpf_task_storage.c
 
 -- 

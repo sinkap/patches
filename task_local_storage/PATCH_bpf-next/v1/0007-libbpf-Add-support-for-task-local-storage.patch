@@ -1,0 +1,33 @@
+From ccf552d3d8e6e07d3194b3d57071803ee302a798 Mon Sep 17 00:00:00 2001
+From: KP Singh <kpsingh@google.com>
+Date: Mon, 2 Nov 2020 18:21:38 +0000
+Subject: [PATCH bpf-next 07/13] libbpf: Add support for task local storage
+
+Signed-off-by: KP Singh <kpsingh@google.com>
+---
+ tools/lib/bpf/libbpf_probes.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/tools/lib/bpf/libbpf_probes.c b/tools/lib/bpf/libbpf_probes.c
+index 5482a9b7ae2d..bed00ca194f0 100644
+--- a/tools/lib/bpf/libbpf_probes.c
++++ b/tools/lib/bpf/libbpf_probes.c
+@@ -1,6 +1,7 @@
+ // SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause)
+ /* Copyright (c) 2019 Netronome Systems, Inc. */
+ 
++#include "linux/bpf.h"
+ #include <errno.h>
+ #include <fcntl.h>
+ #include <string.h>
+@@ -230,6 +231,7 @@ bool bpf_probe_map_type(enum bpf_map_type map_type, __u32 ifindex)
+ 		break;
+ 	case BPF_MAP_TYPE_SK_STORAGE:
+ 	case BPF_MAP_TYPE_INODE_STORAGE:
++	case BPF_MAP_TYPE_TASK_STORAGE:
+ 		btf_key_type_id = 1;
+ 		btf_value_type_id = 3;
+ 		value_size = 8;
+-- 
+2.29.1.341.ge80a0c044ae-goog
+
