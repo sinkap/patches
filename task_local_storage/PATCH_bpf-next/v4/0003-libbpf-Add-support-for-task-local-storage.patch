@@ -1,0 +1,29 @@
+From 2db6065f6c3fbda49ed5df2766659ee85f1d1c8b Mon Sep 17 00:00:00 2001
+From: KP Singh <kpsingh@google.com>
+Date: Mon, 2 Nov 2020 18:21:38 +0000
+Subject: [PATCH bpf-next v4 3/9] libbpf: Add support for task local storage
+
+Updates the bpf_probe_map_type API to also support
+BPF_MAP_TYPE_TASK_STORAGE similar to other local storage maps.
+
+Acked-by: Martin KaFai Lau <kafai@fb.com>
+Signed-off-by: KP Singh <kpsingh@google.com>
+---
+ tools/lib/bpf/libbpf_probes.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/tools/lib/bpf/libbpf_probes.c b/tools/lib/bpf/libbpf_probes.c
+index 5482a9b7ae2d..ecaae2927ab8 100644
+--- a/tools/lib/bpf/libbpf_probes.c
++++ b/tools/lib/bpf/libbpf_probes.c
+@@ -230,6 +230,7 @@ bool bpf_probe_map_type(enum bpf_map_type map_type, __u32 ifindex)
+ 		break;
+ 	case BPF_MAP_TYPE_SK_STORAGE:
+ 	case BPF_MAP_TYPE_INODE_STORAGE:
++	case BPF_MAP_TYPE_TASK_STORAGE:
+ 		btf_key_type_id = 1;
+ 		btf_value_type_id = 3;
+ 		value_size = 8;
+-- 
+2.29.1.341.ge80a0c044ae-goog
+
