@@ -1,0 +1,49 @@
+From ce6a4ea0ff466b1f209b6378927bc5c04b2e9ed8 Mon Sep 17 00:00:00 2001
+From: KP Singh <kpsingh@google.com>
+Date: Wed, 11 Nov 2020 23:24:15 +0000
+Subject: [PATCH bpf-next v3 2/2] bpf: Expose bpf_d_path helper to sleepable
+ LSM hooks
+
+Sleepable hooks are never called from an NMI/interrupt context, so it is
+safe to use the bpf_d_path helper in LSM programs attaching to these
+hooks.
+
+The helper is not restricted to sleepable programs and merely uses the
+list of sleeable hooks as the initial subset of LSM hooks where it can
+be used.
+
+Acked-by: Andrii Nakryiko <andrii@kernel.org>
+
+Signed-off-by: KP Singh <kpsingh@google.com>
+---
+ kernel/trace/bpf_trace.c | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/kernel/trace/bpf_trace.c b/kernel/trace/bpf_trace.c
+index e4515b0f62a8..eab1af02c90d 100644
+--- a/kernel/trace/bpf_trace.c
++++ b/kernel/trace/bpf_trace.c
+@@ -16,6 +16,7 @@
+ #include <linux/syscalls.h>
+ #include <linux/error-injection.h>
+ #include <linux/btf_ids.h>
++#include <linux/bpf_lsm.h>
+ 
+ #include <uapi/linux/bpf.h>
+ #include <uapi/linux/btf.h>
+@@ -1178,7 +1179,11 @@ BTF_SET_END(btf_allowlist_d_path)
+ 
+ static bool bpf_d_path_allowed(const struct bpf_prog *prog)
+ {
+-	return btf_id_set_contains(&btf_allowlist_d_path, prog->aux->attach_btf_id);
++	if (prog->type == BPF_PROG_TYPE_LSM)
++		return bpf_lsm_is_sleepable_hook(prog->aux->attach_btf_id);
++
++	return btf_id_set_contains(&btf_allowlist_d_path,
++				   prog->aux->attach_btf_id);
+ }
+ 
+ BTF_ID_LIST_SINGLE(bpf_d_path_btf_ids, struct, path)
+-- 
+2.29.2.299.gdc1121823c-goog
+

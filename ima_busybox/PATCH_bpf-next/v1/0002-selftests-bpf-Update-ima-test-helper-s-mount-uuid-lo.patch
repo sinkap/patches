@@ -1,0 +1,51 @@
+From bcf36173a6d3ce66291054154dc1b77cb9a023e8 Mon Sep 17 00:00:00 2001
+From: KP Singh <kpsingh@google.com>
+Date: Tue, 1 Dec 2020 12:05:29 +0000
+Subject: [PATCH bpf-next 2/2] selftests/bpf: Update ima test helper's mount
+ uuid logic
+
+The test uses blkid to determine the uuid which may not be available on
+every system. Switch the logic to a good-old for loop iterating over
+/dev/disk/by-uuid and reading the symlinks to find the correct UUID for
+a given loop device
+
+Fixes: 34b82d3ac105 ("bpf: Add a selftest for bpf_ima_inode_hash")
+Signed-off-by: KP Singh <kpsingh@google.com>
+---
+ tools/testing/selftests/bpf/ima_setup.sh | 20 ++++++++++++++++++--
+ 1 file changed, 18 insertions(+), 2 deletions(-)
+
+diff --git a/tools/testing/selftests/bpf/ima_setup.sh b/tools/testing/selftests/bpf/ima_setup.sh
+index ed29bde26a12..7b8615c30c09 100755
+--- a/tools/testing/selftests/bpf/ima_setup.sh
++++ b/tools/testing/selftests/bpf/ima_setup.sh
+@@ -31,8 +31,24 @@ setup()
+         mount "${loop_device}" "${mount_dir}"
+ 
+         cp "${TEST_BINARY}" "${mount_dir}"
+-        local mount_uuid="$(blkid -s UUID -o value ${loop_device})"
+-        echo "measure func=BPRM_CHECK fsuuid=${mount_uuid}" > ${IMA_POLICY_FILE}
++        local mount_uuid=""
++        # This can be done with blkid -s UUID -o value ${loop_device} but
++        # blkid might not be available everywhere, especially in busybox
++        # environments.
++        for uuid in $(ls /dev/disk/by-uuid); do
++                local link_target="$(readlink -f /dev/disk/by-uuid/${uuid})"
++                if [[ "${loop_device}" == "${link_target}" ]]; then
++                        mount_uuid="${uuid}"
++                        break;
++                fi
++        done
++
++        if [[ -z "${mount_uuid}" ]]; then
++                echo "Could not find mount_uuid for ${loop_device}"
++                exit 1;
++        fi
++
++        echo "measure func=BPRM_CHECK fsuuid=${mount_uuid:?}" > ${IMA_POLICY_FILE}
+ }
+ 
+ cleanup() {
+-- 
+2.29.2.454.gaff20da3a2-goog
+

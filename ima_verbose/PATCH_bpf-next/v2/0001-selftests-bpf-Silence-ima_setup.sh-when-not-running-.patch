@@ -1,0 +1,67 @@
+From b308d7eca8e5d11977abe120451b59a00f8bba87 Mon Sep 17 00:00:00 2001
+From: KP Singh <kpsingh@kernel.org>
+Date: Tue, 8 Dec 2020 23:51:42 +0000
+Subject: [PATCH bpf-next v2] selftests/bpf: Silence ima_setup.sh when not
+ running in verbose mode.
+
+Currently, ima_setup.sh spews outputs from commands like mkfs and dd
+on the terminal without taking into account the verbosity level of
+the test framework. Update test_progs to set the environment variable
+SELFTESTS_VERBOSE=1 when a verbose output is requested. This
+environment variable is then used by ima_setup.sh (and can be used by
+other similar scripts) to obey the verbosity level of the test harness
+without needing to re-implement command line options for verbosity.
+
+Fixes: 34b82d3ac105 ("bpf: Add a selftest for bpf_ima_inode_hash")
+Reported-by: Andrii Nakryiko <andrii@kernel.org>
+Suggested-by: Andrii Nakryiko <andrii@kernel.org>
+Signed-off-by: KP Singh <kpsingh@kernel.org>
+---
+ tools/testing/selftests/bpf/ima_setup.sh |  6 ++++++
+ tools/testing/selftests/bpf/test_progs.c | 10 ++++++++++
+ 2 files changed, 16 insertions(+)
+
+diff --git a/tools/testing/selftests/bpf/ima_setup.sh b/tools/testing/selftests/bpf/ima_setup.sh
+index 2bfc646bc230..7490a9bae33e 100755
+--- a/tools/testing/selftests/bpf/ima_setup.sh
++++ b/tools/testing/selftests/bpf/ima_setup.sh
+@@ -81,9 +81,15 @@ main()
+ 
+ 	local action="$1"
+ 	local tmp_dir="$2"
++	local verbose="${SELFTESTS_VERBOSE:=0}"
+ 
+ 	[[ ! -d "${tmp_dir}" ]] && echo "Directory ${tmp_dir} doesn't exist" && exit 1
+ 
++	if [[ "${verbose}" -eq 0 ]]; then
++		exec 1> /dev/null
++		exec 2>&1
++	fi
++
+ 	if [[ "${action}" == "setup" ]]; then
+ 		setup "${tmp_dir}"
+ 	elif [[ "${action}" == "cleanup" ]]; then
+diff --git a/tools/testing/selftests/bpf/test_progs.c b/tools/testing/selftests/bpf/test_progs.c
+index 5ef081bdae4e..7d077d48cadd 100644
+--- a/tools/testing/selftests/bpf/test_progs.c
++++ b/tools/testing/selftests/bpf/test_progs.c
+@@ -587,6 +587,16 @@ static error_t parse_arg(int key, char *arg, struct argp_state *state)
+ 				return -EINVAL;
+ 			}
+ 		}
++
++		if (env->verbosity > VERBOSE_NONE) {
++			if (setenv("SELFTESTS_VERBOSE", "1", 1) == -1) {
++				fprintf(stderr,
++					"Unable to setenv SELFTESTS_VERBOSE=1 (errno=%d)",
++					errno);
++				return -1;
++			}
++		}
++
+ 		break;
+ 	case ARG_GET_TEST_CNT:
+ 		env->get_test_cnt = true;
+-- 
+2.29.2.576.ga3fc446d84-goog
+

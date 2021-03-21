@@ -1,0 +1,23 @@
+From 1a417ae810a0a4940ef4c5d021d92cadcb9e0691 Mon Sep 17 00:00:00 2001
+From: KP Singh <kpsingh@google.com>
+Date: Thu, 12 Nov 2020 19:56:17 +0000
+Subject: [PATCH bpf-next v2 0/2] Sleepable LSM Hooks
+
+# v1 -> v2
+
+  * Fixed typos and formatting errors.
+  * Added Andrii's ack.
+
+KP Singh (2):
+  bpf: Augment the set of sleepable LSM hooks
+  bpf: Expose bpf_d_path helper to sleepable LSM hooks
+
+ include/linux/bpf_lsm.h  |   7 +++
+ kernel/bpf/bpf_lsm.c     | 121 +++++++++++++++++++++++++++++++++++++++
+ kernel/bpf/verifier.c    |  16 +-----
+ kernel/trace/bpf_trace.c |   7 ++-
+ 4 files changed, 135 insertions(+), 16 deletions(-)
+
+-- 
+2.29.2.222.g5d2a92d10f8-goog
+

@@ -1,0 +1,145 @@
+From d31a9d7a17d2eb2a87ed303a0504486c36513b46 Mon Sep 17 00:00:00 2001
+From: Florent Revest <revest@google.com>
+Date: Mon, 8 Jun 2020 18:33:54 +0200
+Subject: [PATCH] DOWNSTREAM: bpf: lsm: Add a bpf_get_cwd helper
+
+DOWNSTREAM REASON: Ideally there should be a generic d_path helper in
+the kernel, but the seqcount sequence is probably useful to keep and
+couldn't be replicated with that helper
+
+Change-Id: Iac9340a2a5659fbe7d9cffcd3d28d9ee0bc3f882
+---
+ include/uapi/linux/bpf.h                | 12 ++++++++
+ kernel/bpf/bpf_lsm_downstream_helpers.c | 41 +++++++++++++++++++++++++
+ tools/include/uapi/linux/bpf.h          | 12 ++++++++
+ 3 files changed, 65 insertions(+)
+
+diff --git a/include/uapi/linux/bpf.h b/include/uapi/linux/bpf.h
+index 755026c6ae95..43834cfd33e6 100644
+--- a/include/uapi/linux/bpf.h
++++ b/include/uapi/linux/bpf.h
+@@ -3908,6 +3908,17 @@ union bpf_attr {
+  * 		value.
+  *	Opcode
+  *		0x21C
++ *
++ * int bpf_get_cwd(char *buf, size_t buf_len)
++ *	Description
++ *		Outputs into buf the current working directory path. This is
++ *		guaranteed to be null terminated.
++ *	Return
++ * 		On success, the strictly positive length of the string,
++ * 		including the trailing NUL character. On error, a negative
++ * 		value.
++ *	Opcode
++ *		0x21D
+  */
+ #define __BASE_BPF_FUNC_MAPPER(FN)	\
+ 	FN(unspec),			\
+@@ -4080,6 +4091,7 @@ union bpf_attr {
+ 	FN(output_env) OPCODE(0x21A),			\
+ 	FN(ima_file_hash) OPCODE(0x21B),		\
+ 	FN(get_file_path) OPCODE(0x21C),		\
++	FN(get_cwd) OPCODE(0x21D),			\
+ 	/* */
+ 
+ #define __EXTRA_BPF_FUNC_IGNORE_OPCODE(opcode)
+diff --git a/kernel/bpf/bpf_lsm_downstream_helpers.c b/kernel/bpf/bpf_lsm_downstream_helpers.c
+index 29b5576f4ce7..c01de206d8bb 100644
+--- a/kernel/bpf/bpf_lsm_downstream_helpers.c
++++ b/kernel/bpf/bpf_lsm_downstream_helpers.c
+@@ -16,6 +16,7 @@
+ #include <linux/binfmts.h>
+ #include <linux/ima.h>
+ #include <linux/mount.h>
++#include <linux/fs_struct.h>
+ 
+ static atomic64_t bpf_id_gen;
+ 
+@@ -212,6 +213,44 @@ const struct bpf_func_proto bpf_get_file_path_proto = {
+ 	.arg3_btf_id	= &bpf_get_file_path_btf_ids[0],
+ };
+ 
++BPF_CALL_2(bpf_get_cwd, char *, buf, u32, size)
++{
++	struct path cwd;
++	unsigned int seq;
++	struct fs_struct *fs = current->fs;
++	char *p;
++	int len;
++
++	do {
++		seq = read_seqcount_begin(&fs->seq);
++		cwd = fs->pwd;
++	} while (read_seqcount_retry(&fs->seq, seq));
++
++	p = d_path(&cwd, buf, size);
++
++	if (IS_ERR(p)) {
++		len = PTR_ERR(p);
++	} else {
++		len = strlen(p);
++		if (len && p != buf) {
++			memmove(buf, p, len);
++		}
++		buf[len] = 0;
++		/* Account for the NUL byte */
++		len += 1;
++	}
++
++	return len;
++}
++
++const struct bpf_func_proto bpf_get_cwd_proto = {
++	.func		= bpf_get_cwd,
++	.gpl_only	= true,
++	.ret_type	= RET_INTEGER,
++	.arg1_type	= ARG_PTR_TO_UNINIT_MEM,
++	.arg2_type	= ARG_CONST_SIZE,
++};
++
+ const struct bpf_func_proto *bpf_lsm_downstream_func_proto
+ 			 (enum bpf_func_id func_id, const struct bpf_prog *prog)
+ {
+@@ -226,6 +265,8 @@ const struct bpf_func_proto *bpf_lsm_downstream_func_proto
+ 		return &bpf_ima_file_hash_proto;
+ 	case BPF_FUNC_get_file_path:
+ 		return &bpf_get_file_path_proto;
++	case BPF_FUNC_get_cwd:
++		return &bpf_get_cwd_proto;
+ 	default:
+ 		return NULL;
+ 	}
+diff --git a/tools/include/uapi/linux/bpf.h b/tools/include/uapi/linux/bpf.h
+index 755026c6ae95..43834cfd33e6 100644
+--- a/tools/include/uapi/linux/bpf.h
++++ b/tools/include/uapi/linux/bpf.h
+@@ -3908,6 +3908,17 @@ union bpf_attr {
+  * 		value.
+  *	Opcode
+  *		0x21C
++ *
++ * int bpf_get_cwd(char *buf, size_t buf_len)
++ *	Description
++ *		Outputs into buf the current working directory path. This is
++ *		guaranteed to be null terminated.
++ *	Return
++ * 		On success, the strictly positive length of the string,
++ * 		including the trailing NUL character. On error, a negative
++ * 		value.
++ *	Opcode
++ *		0x21D
+  */
+ #define __BASE_BPF_FUNC_MAPPER(FN)	\
+ 	FN(unspec),			\
+@@ -4080,6 +4091,7 @@ union bpf_attr {
+ 	FN(output_env) OPCODE(0x21A),			\
+ 	FN(ima_file_hash) OPCODE(0x21B),		\
+ 	FN(get_file_path) OPCODE(0x21C),		\
++	FN(get_cwd) OPCODE(0x21D),			\
+ 	/* */
+ 
+ #define __EXTRA_BPF_FUNC_IGNORE_OPCODE(opcode)
+-- 
+2.30.0.478.g8a0d178c01-goog
+

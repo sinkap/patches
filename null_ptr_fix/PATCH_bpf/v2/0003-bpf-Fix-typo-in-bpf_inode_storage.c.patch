@@ -1,0 +1,38 @@
+From a366bffe949791c6f08ad63ef8aa5e3ab400e222 Mon Sep 17 00:00:00 2001
+From: KP Singh <kpsingh@kernel.org>
+Date: Mon, 11 Jan 2021 18:44:27 +0000
+Subject: [PATCH bpf v2 3/3] bpf: Fix typo in bpf_inode_storage.c
+
+Fix "gurranteed" -> "guaranteed" in bpf_inode_storage.c
+
+Suggested-by: Andrii Nakryiko <andrii@kernel.org>
+Signed-off-by: KP Singh <kpsingh@kernel.org>
+---
+ kernel/bpf/bpf_inode_storage.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/kernel/bpf/bpf_inode_storage.c b/kernel/bpf/bpf_inode_storage.c
+index dbc1dbdd2cbf..2f0597320b6d 100644
+--- a/kernel/bpf/bpf_inode_storage.c
++++ b/kernel/bpf/bpf_inode_storage.c
+@@ -183,7 +183,7 @@ BPF_CALL_4(bpf_inode_storage_get, struct bpf_map *, map, struct inode *, inode,
+ 	if (sdata)
+ 		return (unsigned long)sdata->data;
+ 
+-	/* This helper must only called from where the inode is gurranteed
++	/* This helper must only called from where the inode is guaranteed
+ 	 * to have a refcount and cannot be freed.
+ 	 */
+ 	if (flags & BPF_LOCAL_STORAGE_GET_F_CREATE) {
+@@ -203,7 +203,7 @@ BPF_CALL_2(bpf_inode_storage_delete,
+ 	if (!inode)
+ 		return -EINVAL;
+ 
+-	/* This helper must only called from where the inode is gurranteed
++	/* This helper must only called from where the inode is guaranteed
+ 	 * to have a refcount and cannot be freed.
+ 	 */
+ 	return inode_storage_delete(inode, map);
+-- 
+2.30.0.284.gd98b1dd5eaa7-goog
+

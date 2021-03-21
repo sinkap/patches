@@ -1,0 +1,49 @@
+From 2ba888443e7a75b9254eebfac4c281168963cb0f Mon Sep 17 00:00:00 2001
+From: KP Singh <kpsingh@kernel.org>
+Date: Thu, 4 Feb 2021 19:41:43 +0000
+Subject: [PATCH bpf-next v5 0/2] BPF selftest helper script
+
+# v4 -> v5
+
+- Use %Y (modification time) instead of %W (creation time) of the local
+  copy of the kernel config to check for newer upstream config.
+- Rename the script to vmtest.sh
+
+# v3 -> v4
+
+- Fix logic for updating kernel config to not download the file
+  if there are no upstream modifications and avoid extraneous
+  kernel compilation as suggested by Andrii.
+- This also removes the need for the -k flag.
+
+# v2 -> v3
+
+- Fixes to silence verbose commands
+- Fixed output buffering without being teed out
+- Fixed the clobbered error code of the script
+- Other fixes suggested by Andrii
+
+# v1 -> v2
+
+- The script now compiles the kernel by default, and the -k option
+  implies "keep the kernel"
+- Pointer to the script in the docs.
+- Some minor simplifications.
+
+Allow developers and contributors to understand if their changes would
+end up breaking the BPF CI and avoid the back and forth required for
+fixing the test cases in the CI environment. The se
+
+
+KP Singh (2):
+  bpf: Helper script for running BPF presubmit tests
+  bpf/selftests: Add a short note about vmtest.sh in README.rst
+
+ tools/testing/selftests/bpf/README.rst |  24 ++
+ tools/testing/selftests/bpf/vmtest.sh  | 368 +++++++++++++++++++++++++
+ 2 files changed, 392 insertions(+)
+ create mode 100755 tools/testing/selftests/bpf/vmtest.sh
+
+-- 
+2.30.0.365.g02bc693789-goog
+

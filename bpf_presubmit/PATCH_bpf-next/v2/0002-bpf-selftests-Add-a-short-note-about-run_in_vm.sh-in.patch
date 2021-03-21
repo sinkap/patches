@@ -1,0 +1,53 @@
+From 4a31b2ede55a81d0c2641071f9ba808233dc8eaf Mon Sep 17 00:00:00 2001
+From: KP Singh <kpsingh@kernel.org>
+Date: Sat, 23 Jan 2021 00:35:23 +0000
+Subject: [PATCH bpf-next v2 2/2] bpf/selftests: Add a short note about
+ run_in_vm.sh in README.rst
+
+Add a short note to make contributors aware of the existence of the
+script. The documentation does not intentionally document all the
+options of the script to avoid mentioning it in two places (it's
+available in the usage / help message of the script).
+
+Signed-off-by: KP Singh <kpsingh@kernel.org>
+---
+ tools/testing/selftests/bpf/README.rst | 23 +++++++++++++++++++++++
+ 1 file changed, 23 insertions(+)
+
+diff --git a/tools/testing/selftests/bpf/README.rst b/tools/testing/selftests/bpf/README.rst
+index ca064180d4d0..a0dac65b6b01 100644
+--- a/tools/testing/selftests/bpf/README.rst
++++ b/tools/testing/selftests/bpf/README.rst
+@@ -6,6 +6,29 @@ General instructions on running selftests can be found in
+ 
+ __ /Documentation/bpf/bpf_devel_QA.rst#q-how-to-run-bpf-selftests
+ 
++=========================
++Running Selftests in a VM
++=========================
++
++It's now possible to run the selftests using ``tools/testing/selftests/bpf/run_in_vm.sh``.
++The script tries to ensure that the tests are run with the same environment as they
++would be run post-submit in the CI used by the Maintainers.
++
++This script downloads a suitable Kconfig and VM userspace image from the system used by
++the CI. It builds the kernel (without overwriting your existing Kconfig), recompiles the
++bpf selftests, runs them (by default ``tools/testing/selftests/bpf/test_progs``) and
++saves the resulting output (by default in ``~/.bpf_selftests``).
++
++For more information on about using the script, run:
++
++.. code-block:: console
++
++	$ tools/testing/selftests/bpf/run_in_vm.sh -h
++
++.. note:: The script does not yet update pahole and LLVM, so these will still need to be
++          manually updated.
++
++.. note:: The script currently only supports x86_64.
+ 
+ Additional information about selftest failures are
+ documented here.
+-- 
+2.30.0.280.ga3ce27912f-goog
+

@@ -1,0 +1,32 @@
+From a366bffe949791c6f08ad63ef8aa5e3ab400e222 Mon Sep 17 00:00:00 2001
+From: KP Singh <kpsingh@kernel.org>
+Date: Mon, 11 Jan 2021 21:10:28 +0000
+Subject: [PATCH bpf v2 0/3] Fix local storage helper OOPs
+
+It was noted in
+https://lore.kernel.org/bpf/CACYkzJ55X8Tp2q4+EFf2hOM_Lysoim1xJY1YdA3k=T3woMW6mg@mail.gmail.com/T/#t
+that the local storage helpers do not handle null owner pointers
+correctly. This patch fixes the task and inode storage helpers with a
+null check. In order to keep the check explicit, it's kept in the body
+of the helpers similar to sk_storage and also fixes a minor typo in
+bpf_inode_storage.c [I did not add a fixes and reported tag to the
+patch that fixes the typo since it's a non-functional change].
+
+The series also incorporates the example posted by Gilad into the
+selftest. The selftest, without the fix reproduces the oops and the
+subsequent patch fixes it.
+
+KP Singh (3):
+  bpf: update local storage test to check handling of null ptrs
+  bpf: local storage helpers should check nullness of owner ptr passed
+  bpf: Fix typo in bpf_inode_storage.c
+
+ kernel/bpf/bpf_inode_storage.c                |  9 +-
+ kernel/bpf/bpf_task_storage.c                 |  5 +-
+ .../bpf/prog_tests/test_local_storage.c       | 96 +++++--------------
+ .../selftests/bpf/progs/local_storage.c       | 62 ++++++------
+ 4 files changed, 71 insertions(+), 101 deletions(-)
+
+-- 
+2.30.0.284.gd98b1dd5eaa7-goog
+

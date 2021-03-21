@@ -1,0 +1,29 @@
+From 4a31b2ede55a81d0c2641071f9ba808233dc8eaf Mon Sep 17 00:00:00 2001
+From: KP Singh <kpsingh@kernel.org>
+Date: Sat, 23 Jan 2021 00:40:56 +0000
+Subject: [PATCH bpf-next v2 0/2] BPF selftest helper script
+
+# v1 -> v2
+
+- The script now compiles the kernel by default, and the -k option
+  implies "keep the kernel"
+- Pointer to the script in the docs.
+- Some minor simplifications.
+
+Allow developers and contributors to understand if their changes would
+end up breaking the BPF CI and avoid the back and forth required for
+fixing the test cases in the CI environment. The series also adds a
+pointer in tools/testing/selftests/bpf/README.rst.
+
+KP Singh (2):
+  bpf: Helper script for running BPF presubmit tests
+  bpf/selftests: Add a short note about run_in_vm.sh in README.rst
+
+ tools/testing/selftests/bpf/README.rst   |  23 ++
+ tools/testing/selftests/bpf/run_in_vm.sh | 353 +++++++++++++++++++++++
+ 2 files changed, 376 insertions(+)
+ create mode 100755 tools/testing/selftests/bpf/run_in_vm.sh
+
+-- 
+2.30.0.280.ga3ce27912f-goog
+

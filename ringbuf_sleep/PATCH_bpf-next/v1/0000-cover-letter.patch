@@ -1,0 +1,33 @@
+From a519fd7a07d920c43f8db2b06e1ac0376b408f3f Mon Sep 17 00:00:00 2001
+From: KP Singh <kpsingh@kernel.org>
+Date: Wed, 3 Feb 2021 18:23:26 +0000
+Subject: [PATCH bpf-next 0/2] BPF Ringbuffer + Sleepable Programs
+
+Sleepable programs currently do not have access to any ringbuffer and
+since the perf ring buffer is a per-cpu map, it would not be trivial to
+enable for sleepable programs. Our specific use-case is to use the
+bpf_ima_inode_hash helper and write the hash to a ring buffer from a
+sleepable LSM hook.
+
+This series allows the BPF ringbuffer to be used in sleepable programs
+(tracing and lsm). Since the helper prototypes were already exposed
+the only change required was have the verifier allow
+BPF_MAP_TYPE_RINGBUF for sleepable programs. The ima test is also
+modified to use the ringbuffer instead of global variables.
+
+Based on dicussions we had over the BPF office hours and enabling all
+the possible debug options, I could not find any issues or warnings when
+using the ring buffer from sleepable programs.
+
+KP Singh (2):
+  bpf: Allow usage of BPF ringbuffer in sleepable programs
+  bpf/selftests: Update the IMA test to use BPF ring buffer
+
+ kernel/bpf/verifier.c                         |  2 ++
+ .../selftests/bpf/prog_tests/test_ima.c       | 23 ++++++++++---
+ tools/testing/selftests/bpf/progs/ima.c       | 33 ++++++++++++++-----
+ 3 files changed, 45 insertions(+), 13 deletions(-)
+
+-- 
+2.30.0.365.g02bc693789-goog
+

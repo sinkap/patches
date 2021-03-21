@@ -1,0 +1,37 @@
+From 22ca408199a171e705620ea1cb0acac6e96ac2aa Mon Sep 17 00:00:00 2001
+From: KP Singh <kpsingh@google.com>
+Date: Thu, 26 Nov 2020 18:24:32 +0000
+Subject: [PATCH bpf-next] selftests/bpf: Fix flavored variants of test_ima
+
+Flavored variants of test_progs (e.g. test_progs-no_alu32) change their
+working directory to the corresponding subdirectory (e.g. no_alu32).
+Since the setup script required by test_ima (ima_setup.sh) is not
+mentioned in the dependencies, it does not get copied to these
+subdirectories and causes flavored variants of test_ima to fail.
+
+Adding the script to TRUNNER_EXTRA_FILES ensures that the file is also
+copied to the subdirectories for the flavored variants of test_progs.
+
+Fixes: 34b82d3ac105 ("bpf: Add a selftest for bpf_ima_inode_hash")
+Reported-by: Yonghong Song <yhs@fb.com>
+Suggested-by: Yonghong Song <yhs@fb.com>
+Signed-off-by: KP Singh <kpsingh@google.com>
+---
+ tools/testing/selftests/bpf/Makefile | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/tools/testing/selftests/bpf/Makefile b/tools/testing/selftests/bpf/Makefile
+index 3d5940cd110d..894192c319fb 100644
+--- a/tools/testing/selftests/bpf/Makefile
++++ b/tools/testing/selftests/bpf/Makefile
+@@ -389,6 +389,7 @@ TRUNNER_EXTRA_SOURCES := test_progs.c cgroup_helpers.c trace_helpers.c	\
+ 			 network_helpers.c testing_helpers.c		\
+ 			 btf_helpers.c	flow_dissector_load.h
+ TRUNNER_EXTRA_FILES := $(OUTPUT)/urandom_read				\
++		       ima_setup.sh					\
+ 		       $(wildcard progs/btf_dump_test_case_*.c)
+ TRUNNER_BPF_BUILD_RULE := CLANG_BPF_BUILD_RULE
+ TRUNNER_BPF_CFLAGS := $(BPF_CFLAGS) $(CLANG_CFLAGS)
+-- 
+2.29.2.454.gaff20da3a2-goog
+

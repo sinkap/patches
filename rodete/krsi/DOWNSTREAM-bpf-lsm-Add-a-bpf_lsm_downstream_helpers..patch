@@ -1,0 +1,119 @@
+From 02331138a3b13c70339cb62c865ddc5669118632 Mon Sep 17 00:00:00 2001
+From: Florent Revest <revest@google.com>
+Date: Thu, 11 Jun 2020 18:20:31 +0200
+Subject: [PATCH] DOWNSTREAM: bpf: lsm: Add a bpf_lsm_downstream_helpers.c file
+
+DOWNSTREAM REASON: This file is only here to clearly separate downstream
+code from upstream code and make our lives easier while rebasing the
+patches.
+
+Change-Id: I9aa461492cfcedd22eb8bc7c56302226a00855a8
+---
+ include/linux/bpf_lsm_downstream_helpers.h | 28 ++++++++++++++++++++++
+ kernel/bpf/Makefile                        |  2 +-
+ kernel/bpf/bpf_lsm_downstream_helpers.c    | 24 +++++++++++++++++++
+ kernel/trace/bpf_trace.c                   |  3 ++-
+ 4 files changed, 55 insertions(+), 2 deletions(-)
+ create mode 100644 include/linux/bpf_lsm_downstream_helpers.h
+ create mode 100644 kernel/bpf/bpf_lsm_downstream_helpers.c
+
+diff --git a/include/linux/bpf_lsm_downstream_helpers.h b/include/linux/bpf_lsm_downstream_helpers.h
+new file mode 100644
+index 000000000000..208358c4b151
+--- /dev/null
++++ b/include/linux/bpf_lsm_downstream_helpers.h
+@@ -0,0 +1,28 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++
++/*
++ * Copyright (C) 2020 Google LLC.
++ */
++
++#ifndef _LINUX_BPF_LSM_DOWNSTREAM_HELPERS_H
++#define _LINUX_BPF_LSM_DOWNSTREAM_HELPERS_H
++
++#include <linux/bpf.h>
++#include <linux/lsm_hooks.h>
++
++#ifdef CONFIG_BPF_LSM
++
++const struct bpf_func_proto *bpf_lsm_downstream_func_proto
++			(enum bpf_func_id func_id, const struct bpf_prog *prog);
++
++#else /* !CONFIG_BPF_LSM */
++
++const struct bpf_func_proto *bpf_lsm_downstream_func_proto
++			 (enum bpf_func_id func_id, const struct bpf_prog *prog)
++{
++	return NULL;
++}
++
++#endif /* CONFIG_BPF_LSM */
++
++#endif /* _LINUX_BPF_LSM_DOWNSTREAM_HELPERS_H */
+diff --git a/kernel/bpf/Makefile b/kernel/bpf/Makefile
+index d1249340fd6b..4acf0c16453e 100644
+--- a/kernel/bpf/Makefile
++++ b/kernel/bpf/Makefile
+@@ -34,6 +34,6 @@ obj-$(CONFIG_DEBUG_INFO_BTF) += sysfs_btf.o
+ endif
+ ifeq ($(CONFIG_BPF_JIT),y)
+ obj-$(CONFIG_BPF_SYSCALL) += bpf_struct_ops.o
+-obj-${CONFIG_BPF_LSM} += bpf_lsm.o
++obj-${CONFIG_BPF_LSM} += bpf_lsm.o bpf_lsm_downstream_helpers.o
+ endif
+ obj-$(CONFIG_BPF_PRELOAD) += preload/
+diff --git a/kernel/bpf/bpf_lsm_downstream_helpers.c b/kernel/bpf/bpf_lsm_downstream_helpers.c
+new file mode 100644
+index 000000000000..8f6e05558a1f
+--- /dev/null
++++ b/kernel/bpf/bpf_lsm_downstream_helpers.c
+@@ -0,0 +1,24 @@
++// SPDX-License-Identifier: GPL-2.0
++
++/*
++ * Copyright (C) 2020 Google LLC.
++ */
++
++/*
++ * WARNING: Code in this file is downstream and meant to be upstreamed in one
++ * way or another.
++ */
++
++#include <linux/bpf.h>
++#include <linux/filter.h>
++#include <linux/types.h>
++#include <linux/btf_ids.h>
++
++const struct bpf_func_proto *bpf_lsm_downstream_func_proto
++			 (enum bpf_func_id func_id, const struct bpf_prog *prog)
++{
++	switch (func_id) {
++	default:
++		return NULL;
++	}
++}
+diff --git a/kernel/trace/bpf_trace.c b/kernel/trace/bpf_trace.c
+index 59bd5b948470..923c04b08bc2 100644
+--- a/kernel/trace/bpf_trace.c
++++ b/kernel/trace/bpf_trace.c
+@@ -19,6 +19,7 @@
+ #include <linux/bpf_lsm.h>
+ 
+ #include <net/bpf_sk_storage.h>
++#include <linux/bpf_lsm_downstream_helpers.h>
+ 
+ #include <uapi/linux/bpf.h>
+ #include <uapi/linux/btf.h>
+@@ -1367,7 +1368,7 @@ bpf_tracing_func_proto(enum bpf_func_id func_id, const struct bpf_prog *prog)
+ 	case BPF_FUNC_this_cpu_ptr:
+ 		return &bpf_this_cpu_ptr_proto;
+ 	default:
+-		return NULL;
++		return bpf_lsm_downstream_func_proto(func_id, prog);
+ 	}
+ }
+ 
+-- 
+2.30.0.478.g8a0d178c01-goog
+

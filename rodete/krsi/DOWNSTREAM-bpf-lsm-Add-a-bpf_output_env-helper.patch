@@ -1,0 +1,196 @@
+From 68315bd49367450683d79372503b856b483582aa Mon Sep 17 00:00:00 2001
+From: Florent Revest <revest@google.com>
+Date: Fri, 5 Jun 2020 14:50:12 +0200
+Subject: [PATCH] DOWNSTREAM: bpf: lsm: Add a bpf_output_env helper
+
+DOWNSTREAM REASON: This feature is too specific and can't be implemented
+with other helpers yet.
+
+Change-Id: Ifb1d556e7103684dd46e9f0654bd0ef365d71f21
+---
+ include/uapi/linux/bpf.h                | 27 ++++++++++++
+ kernel/bpf/bpf_lsm_downstream_helpers.c | 57 +++++++++++++++++++++++++
+ kernel/bpf/verifier.c                   |  1 +
+ tools/include/uapi/linux/bpf.h          | 27 ++++++++++++
+ 4 files changed, 112 insertions(+)
+
+diff --git a/include/uapi/linux/bpf.h b/include/uapi/linux/bpf.h
+index 15c61e4c1080..2f018ea377cc 100644
+--- a/include/uapi/linux/bpf.h
++++ b/include/uapi/linux/bpf.h
+@@ -3851,6 +3851,32 @@ union bpf_attr {
+  *		0 on success, or a negative error in case of failure.
+  *	Opcode
+  *		0x219
++ *
++ * u64 bpf_output_env(struct linux_binprm *bprm, void *map, u64 flags, void *meta, int meta_size)
++ *	Description
++ *		This outputs multiple chunks of data to the perf ring buffer,
++ *		one per environment variable, and each of them containing the
++ *		two following buffers consecutively:
++ *		1- a buffer given by the caller in *meta* of size *meta_size*,
++ *		this can be used to identify the message.
++ *		2- One environment variable. It is guaranteed to be null
++ *		terminated string with the format "ENVVAR=value". Env vars
++ *		arrive in order.
++ *
++ *		*map* should be of type **BPF_MAP_TYPE_PERF_EVENT_ARRAY**. The
++ *		event must have the following attributes: **PERF_SAMPLE_RAW**
++ *		as **sample_type**, **PERF_TYPE_SOFTWARE** as **type**, and
++ *		**PERF_COUNT_SW_BPF_OUTPUT** as **config**.
++ *
++ *		The *flags* are used to indicate the index in *map* for which
++ *		the value must be put, masked with **BPF_F_INDEX_MASK**.
++ *		Alternatively, *flags* can be set to **BPF_F_CURRENT_CPU**
++ *		to indicate that the index of the current CPU core should be
++ *		used.
++ *	Return
++ *		0 on success, or a negative error in case of failure.
++ *	Opcode
++ *		0x21A
+  */
+ #define __BASE_BPF_FUNC_MAPPER(FN)	\
+ 	FN(unspec),			\
+@@ -4020,6 +4046,7 @@ union bpf_attr {
+ #define __EXTRA_BPF_FUNC_MAPPER(FN, OPCODE)		\
+ 	FN(gen_id) OPCODE(0x218),			\
+ 	FN(output_argv) OPCODE(0x219),			\
++	FN(output_env) OPCODE(0x21A),			\
+ 	/* */
+ 
+ #define __EXTRA_BPF_FUNC_IGNORE_OPCODE(opcode)
+diff --git a/kernel/bpf/bpf_lsm_downstream_helpers.c b/kernel/bpf/bpf_lsm_downstream_helpers.c
+index 1be6e7706a25..1f7db2b6b0fb 100644
+--- a/kernel/bpf/bpf_lsm_downstream_helpers.c
++++ b/kernel/bpf/bpf_lsm_downstream_helpers.c
+@@ -74,6 +74,61 @@ const struct bpf_func_proto bpf_output_argv_proto = {
+ 	.arg5_type	= ARG_CONST_SIZE_OR_ZERO,
+ };
+ 
++BPF_CALL_5(bpf_output_env, struct linux_binprm *, bprm,
++			   struct bpf_map *, map, u64, flags,
++			   void *, meta, u64, meta_size)
++{
++	unsigned long i;
++	int ret = 0;
++	char *env_kern, *env_user, *arg_user;
++
++	arg_user = (void *)bprm->p;
++	for (i = 0; i < bprm->argc; i++) {
++		long arg_len = strnlen_user_nofault(arg_user, MAX_ARGV_STRLEN);
++
++		if (arg_len <= 0 || arg_len > MAX_ARGV_STRLEN)
++			return -EFAULT;
++
++		arg_user += arg_len;
++	}
++
++	env_kern = kmalloc(MAX_ARGV_STRLEN, GFP_NOWAIT | __GFP_NOWARN);
++	if (!env_kern)
++		return -ENOMEM;
++
++	env_user = arg_user;
++
++	for (i = 0; i < bprm->envc; i++) {
++		long copied = strncpy_from_user_nofault(env_kern, env_user,
++							MAX_ARGV_STRLEN);
++		if (copied <= 0 || copied > MAX_ARGV_STRLEN - 1) {
++			ret = -EFAULT;
++			goto out;
++		}
++
++		ret |= bpf_event_output(map, flags, meta, meta_size,
++					env_kern, copied, NULL);
++		env_user += copied;
++	}
++
++out:
++	kfree(env_kern);
++	return ret;
++}
++
++BTF_ID_LIST_SINGLE(bpf_output_env_btf_ids, struct, linux_binprm)
++const struct bpf_func_proto bpf_output_env_proto = {
++	.func		= bpf_output_env,
++	.gpl_only	= true,
++	.ret_type	= RET_INTEGER,
++	.arg1_type	= ARG_PTR_TO_BTF_ID,
++	.arg1_btf_id	= &bpf_output_env_btf_ids[0],
++	.arg2_type	= ARG_CONST_MAP_PTR,
++	.arg3_type	= ARG_ANYTHING,
++	.arg4_type	= ARG_PTR_TO_MEM,
++	.arg5_type	= ARG_CONST_SIZE_OR_ZERO,
++};
++
+ const struct bpf_func_proto *bpf_lsm_downstream_func_proto
+ 			 (enum bpf_func_id func_id, const struct bpf_prog *prog)
+ {
+@@ -82,6 +137,8 @@ const struct bpf_func_proto *bpf_lsm_downstream_func_proto
+ 		return &bpf_gen_id_proto;
+ 	case BPF_FUNC_output_argv:
+ 		return &bpf_output_argv_proto;
++	case BPF_FUNC_output_env:
++		return &bpf_output_env_proto;
+ 	default:
+ 		return NULL;
+ 	}
+diff --git a/kernel/bpf/verifier.c b/kernel/bpf/verifier.c
+index 7c537d64f9f9..8d7b219930f2 100644
+--- a/kernel/bpf/verifier.c
++++ b/kernel/bpf/verifier.c
+@@ -4378,6 +4378,7 @@ static int check_map_func_compatibility(struct bpf_verifier_env *env,
+ 		    func_id != BPF_FUNC_perf_event_output &&
+ 		    func_id != BPF_FUNC_skb_output &&
+ 		    func_id != BPF_FUNC_output_argv &&
++		    func_id != BPF_FUNC_output_env &&
+ 		    func_id != BPF_FUNC_perf_event_read_value &&
+ 		    func_id != BPF_FUNC_xdp_output)
+ 			goto error;
+diff --git a/tools/include/uapi/linux/bpf.h b/tools/include/uapi/linux/bpf.h
+index 15c61e4c1080..2f018ea377cc 100644
+--- a/tools/include/uapi/linux/bpf.h
++++ b/tools/include/uapi/linux/bpf.h
+@@ -3851,6 +3851,32 @@ union bpf_attr {
+  *		0 on success, or a negative error in case of failure.
+  *	Opcode
+  *		0x219
++ *
++ * u64 bpf_output_env(struct linux_binprm *bprm, void *map, u64 flags, void *meta, int meta_size)
++ *	Description
++ *		This outputs multiple chunks of data to the perf ring buffer,
++ *		one per environment variable, and each of them containing the
++ *		two following buffers consecutively:
++ *		1- a buffer given by the caller in *meta* of size *meta_size*,
++ *		this can be used to identify the message.
++ *		2- One environment variable. It is guaranteed to be null
++ *		terminated string with the format "ENVVAR=value". Env vars
++ *		arrive in order.
++ *
++ *		*map* should be of type **BPF_MAP_TYPE_PERF_EVENT_ARRAY**. The
++ *		event must have the following attributes: **PERF_SAMPLE_RAW**
++ *		as **sample_type**, **PERF_TYPE_SOFTWARE** as **type**, and
++ *		**PERF_COUNT_SW_BPF_OUTPUT** as **config**.
++ *
++ *		The *flags* are used to indicate the index in *map* for which
++ *		the value must be put, masked with **BPF_F_INDEX_MASK**.
++ *		Alternatively, *flags* can be set to **BPF_F_CURRENT_CPU**
++ *		to indicate that the index of the current CPU core should be
++ *		used.
++ *	Return
++ *		0 on success, or a negative error in case of failure.
++ *	Opcode
++ *		0x21A
+  */
+ #define __BASE_BPF_FUNC_MAPPER(FN)	\
+ 	FN(unspec),			\
+@@ -4020,6 +4046,7 @@ union bpf_attr {
+ #define __EXTRA_BPF_FUNC_MAPPER(FN, OPCODE)		\
+ 	FN(gen_id) OPCODE(0x218),			\
+ 	FN(output_argv) OPCODE(0x219),			\
++	FN(output_env) OPCODE(0x21A),			\
+ 	/* */
+ 
+ #define __EXTRA_BPF_FUNC_IGNORE_OPCODE(opcode)
+-- 
+2.30.0.478.g8a0d178c01-goog
+

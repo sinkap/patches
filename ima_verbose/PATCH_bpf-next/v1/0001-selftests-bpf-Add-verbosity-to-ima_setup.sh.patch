@@ -1,0 +1,125 @@
+From e11fb7f7f19ddb21d51a111569fe68189dcd5aef Mon Sep 17 00:00:00 2001
+From: KP Singh <kpsingh@google.com>
+Date: Fri, 4 Dec 2020 14:40:25 +0000
+Subject: [PATCH bpf-next] selftests/bpf: Add verbosity to ima_setup.sh
+
+Currently, ima_setup.sh spews outputs from commands like mkfs and dd
+on the terminal without taking into account the verbosity level of
+the test framework. Add an option to specify the verbosity for the
+shell script and only print output when verbosity > VERBOSE_NONE.
+
+Since the command line parsing got complicated with the addition of
+verbosity, switched "action" (-a, --action) and "directory" (-d, --dir)
+to command line switches as well.
+
+Fixes: 34b82d3ac105 ("bpf: Add a selftest for bpf_ima_inode_hash")
+Reported-by: Andrii Nakryiko <andrii@kernel.org>
+Signed-off-by: KP Singh <kpsingh@google.com>
+---
+ tools/testing/selftests/bpf/ima_setup.sh      | 36 ++++++++++++++++---
+ .../selftests/bpf/prog_tests/test_ima.c       | 11 ++++--
+ 2 files changed, 40 insertions(+), 7 deletions(-)
+
+diff --git a/tools/testing/selftests/bpf/ima_setup.sh b/tools/testing/selftests/bpf/ima_setup.sh
+index 2bfc646bc230..d8d063fa7781 100755
+--- a/tools/testing/selftests/bpf/ima_setup.sh
++++ b/tools/testing/selftests/bpf/ima_setup.sh
+@@ -10,7 +10,7 @@ TEST_BINARY="/bin/true"
+ 
+ usage()
+ {
+-	echo "Usage: $0 <setup|cleanup|run> <existing_tmp_dir>"
++	echo "Usage: $0 -a <setup|cleanup|run> -d <existing_tmp_dir> -v <yes|no>"
+ 	exit 1
+ }
+ 
+@@ -77,12 +77,40 @@ run()
+ 
+ main()
+ {
+-	[[ $# -ne 2 ]] && usage
++	local tmp_dir=""
++	local action=""
++	local verbosity="no"
++
++	while [[ $# -gt 0 ]]; do
++		case "$1" in
++		-v | --verbosity)
++			shift
++			verbosity="$1"
++			shift
++			;;
++		-a | --action)
++			shift
++			action="$1"
++			shift
++			;;
++		-d | --dir)
++			shift
++			tmp_dir="$1"
++			shift
++			;;
++		* )
++			break
++			;;
++		esac
++	done
+ 
+-	local action="$1"
+-	local tmp_dir="$2"
++	if [[ "${verbosity}" == "no" ]]; then
++		exec 1> /dev/null
++		exec 2>&1
++	fi
+ 
+ 	[[ ! -d "${tmp_dir}" ]] && echo "Directory ${tmp_dir} doesn't exist" && exit 1
++	[[ -z "${action}" ]] && usage
+ 
+ 	if [[ "${action}" == "setup" ]]; then
+ 		setup "${tmp_dir}"
+diff --git a/tools/testing/selftests/bpf/prog_tests/test_ima.c b/tools/testing/selftests/bpf/prog_tests/test_ima.c
+index 61fca681d524..debf53976997 100644
+--- a/tools/testing/selftests/bpf/prog_tests/test_ima.c
++++ b/tools/testing/selftests/bpf/prog_tests/test_ima.c
+@@ -12,6 +12,8 @@
+ 
+ #include "ima.skel.h"
+ 
++#define HELPER_VERBOSITY() (env.verbosity == VERBOSE_NONE ? "no" : "yes")
++
+ static int run_measured_process(const char *measured_dir, u32 *monitored_pid)
+ {
+ 	int child_pid, child_status;
+@@ -19,7 +21,8 @@ static int run_measured_process(const char *measured_dir, u32 *monitored_pid)
+ 	child_pid = fork();
+ 	if (child_pid == 0) {
+ 		*monitored_pid = getpid();
+-		execlp("./ima_setup.sh", "./ima_setup.sh", "run", measured_dir,
++		execlp("./ima_setup.sh", "./ima_setup.sh", "-v",
++		       HELPER_VERBOSITY(), "-a", "run", "-d", measured_dir,
+ 		       NULL);
+ 		exit(errno);
+ 
+@@ -52,7 +55,8 @@ void test_test_ima(void)
+ 	if (CHECK(measured_dir == NULL, "mkdtemp", "err %d\n", errno))
+ 		goto close_prog;
+ 
+-	snprintf(cmd, sizeof(cmd), "./ima_setup.sh setup %s", measured_dir);
++	snprintf(cmd, sizeof(cmd), "./ima_setup.sh -v %s -a setup -d %s",
++		 HELPER_VERBOSITY(), measured_dir);
+ 	if (CHECK_FAIL(system(cmd)))
+ 		goto close_clean;
+ 
+@@ -67,7 +71,8 @@ void test_test_ima(void)
+ 	      "ima_hash = %lu\n", skel->bss->ima_hash);
+ 
+ close_clean:
+-	snprintf(cmd, sizeof(cmd), "./ima_setup.sh cleanup %s", measured_dir);
++	snprintf(cmd, sizeof(cmd), "./ima_setup.sh -v %s -a cleanup -d %s",
++		 HELPER_VERBOSITY(), measured_dir);
+ 	CHECK_FAIL(system(cmd));
+ close_prog:
+ 	ima__destroy(skel);
+-- 
+2.29.2.576.ga3fc446d84-goog
+

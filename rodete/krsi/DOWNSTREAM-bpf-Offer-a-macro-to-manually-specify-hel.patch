@@ -1,0 +1,108 @@
+From bfe6b258b44ec657e55708fd5864948a4c9673a8 Mon Sep 17 00:00:00 2001
+From: Florent Revest <revest@google.com>
+Date: Mon, 18 Nov 2019 17:26:51 +0100
+Subject: [PATCH] DOWNSTREAM: bpf: Offer a macro to manually specify helpers
+ opcodes
+
+As part of KRSI's upstreaming, helpers signatures and opcodes might have
+to change. However, those changes might cause ABI breakages in HELM, the
+google3 endpoints agent using KRSI.  To mitigate those changes, we want
+to maintain a known range of helpers so that we can gradually rollout
+new helpers and get rid of abandoned helpers depending on the status of
+HELM's rollout.
+
+This patch extends bpf.h to allow us to define those custom opcodes.
+
+Signed-off-by: Florent Revest <revest@google.com>
+Change-Id: If81736d3ab02103cdeb1fb375013d445b151937d
+Signed-off-by: KP Singh <kpsingh@google.com>
+---
+ include/uapi/linux/bpf.h       | 15 +++++++++++++--
+ tools/include/uapi/linux/bpf.h | 15 +++++++++++++--
+ 2 files changed, 26 insertions(+), 4 deletions(-)
+
+diff --git a/include/uapi/linux/bpf.h b/include/uapi/linux/bpf.h
+index 5a002de02877..513ed852ae28 100644
+--- a/include/uapi/linux/bpf.h
++++ b/include/uapi/linux/bpf.h
+@@ -3818,7 +3818,7 @@ union bpf_attr {
+  *		**-EOPNOTSUP** if IMA is disabled or **-EINVAL** if
+  *		invalid arguments are passed.
+  */
+-#define __BPF_FUNC_MAPPER(FN)		\
++#define __BASE_BPF_FUNC_MAPPER(FN)	\
+ 	FN(unspec),			\
+ 	FN(map_lookup_elem),		\
+ 	FN(map_update_elem),		\
+@@ -3983,15 +3983,26 @@ union bpf_attr {
+ 	FN(ima_inode_hash),		\
+ 	/* */
+ 
++#define __EXTRA_BPF_FUNC_MAPPER(FN, OPCODE)		\
++	/* */
++
++#define __EXTRA_BPF_FUNC_IGNORE_OPCODE(opcode)
++#define __BPF_FUNC_MAPPER(FN)		\
++	__BASE_BPF_FUNC_MAPPER(FN)	\
++	__EXTRA_BPF_FUNC_MAPPER(FN, __EXTRA_BPF_FUNC_IGNORE_OPCODE)
++
+ /* integer value in 'imm' field of BPF_CALL instruction selects which helper
+  * function eBPF program intends to call
+  */
+ #define __BPF_ENUM_FN(x) BPF_FUNC_ ## x
++#define __BPF_ENUM_OPCODE(opcode) = opcode
+ enum bpf_func_id {
+-	__BPF_FUNC_MAPPER(__BPF_ENUM_FN)
++	__BASE_BPF_FUNC_MAPPER(__BPF_ENUM_FN)
++	__EXTRA_BPF_FUNC_MAPPER(__BPF_ENUM_FN, __BPF_ENUM_OPCODE)
+ 	__BPF_FUNC_MAX_ID,
+ };
+ #undef __BPF_ENUM_FN
++#undef __BPF_ENUM_OPCODE
+ 
+ /* All flags used by eBPF helper functions, placed here. */
+ 
+diff --git a/tools/include/uapi/linux/bpf.h b/tools/include/uapi/linux/bpf.h
+index 5a002de02877..513ed852ae28 100644
+--- a/tools/include/uapi/linux/bpf.h
++++ b/tools/include/uapi/linux/bpf.h
+@@ -3818,7 +3818,7 @@ union bpf_attr {
+  *		**-EOPNOTSUP** if IMA is disabled or **-EINVAL** if
+  *		invalid arguments are passed.
+  */
+-#define __BPF_FUNC_MAPPER(FN)		\
++#define __BASE_BPF_FUNC_MAPPER(FN)	\
+ 	FN(unspec),			\
+ 	FN(map_lookup_elem),		\
+ 	FN(map_update_elem),		\
+@@ -3983,15 +3983,26 @@ union bpf_attr {
+ 	FN(ima_inode_hash),		\
+ 	/* */
+ 
++#define __EXTRA_BPF_FUNC_MAPPER(FN, OPCODE)		\
++	/* */
++
++#define __EXTRA_BPF_FUNC_IGNORE_OPCODE(opcode)
++#define __BPF_FUNC_MAPPER(FN)		\
++	__BASE_BPF_FUNC_MAPPER(FN)	\
++	__EXTRA_BPF_FUNC_MAPPER(FN, __EXTRA_BPF_FUNC_IGNORE_OPCODE)
++
+ /* integer value in 'imm' field of BPF_CALL instruction selects which helper
+  * function eBPF program intends to call
+  */
+ #define __BPF_ENUM_FN(x) BPF_FUNC_ ## x
++#define __BPF_ENUM_OPCODE(opcode) = opcode
+ enum bpf_func_id {
+-	__BPF_FUNC_MAPPER(__BPF_ENUM_FN)
++	__BASE_BPF_FUNC_MAPPER(__BPF_ENUM_FN)
++	__EXTRA_BPF_FUNC_MAPPER(__BPF_ENUM_FN, __BPF_ENUM_OPCODE)
+ 	__BPF_FUNC_MAX_ID,
+ };
+ #undef __BPF_ENUM_FN
++#undef __BPF_ENUM_OPCODE
+ 
+ /* All flags used by eBPF helper functions, placed here. */
+ 
+-- 
+2.30.0.478.g8a0d178c01-goog
+

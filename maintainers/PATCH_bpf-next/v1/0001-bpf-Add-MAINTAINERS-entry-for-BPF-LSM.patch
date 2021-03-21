@@ -1,0 +1,39 @@
+From 1391a2706169531ec69e06a186f24bb53874c27f Mon Sep 17 00:00:00 2001
+From: KP Singh <kpsingh@google.com>
+Date: Wed, 25 Nov 2020 20:09:08 +0000
+Subject: [PATCH bpf-next] bpf: Add MAINTAINERS entry for BPF LSM
+
+Similar to XDP and some JITs, also added Brendan and Florent who have
+been reviewing all my patches internally as reviewers. The patches are
+still expected to go via the BPF tree / list / merge workflows.
+
+Signed-off-by: KP Singh <kpsingh@google.com>
+---
+ MAINTAINERS | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/MAINTAINERS b/MAINTAINERS
+index af9f6a3ab100..09c902bee5d2 100644
+--- a/MAINTAINERS
++++ b/MAINTAINERS
+@@ -3366,6 +3366,17 @@ S:	Supported
+ F:	arch/x86/net/
+ X:	arch/x86/net/bpf_jit_comp32.c
+ 
++BPF LSM (Security Audit and Enforcement using eBPF)
++M:	KP Singh <kpsingh@chromium.org>
++R:	Florent Revest <revest@chromium.org>
++R:	Brendan Jackman <jackmanb@chromium.org>
++L:	bpf@vger.kernel.org
++S:	Maintained
++F:	Documentation/bpf/bpf_lsm.rst
++F:	include/linux/bpf_lsm.h
++F:	kernel/bpf/bpf_lsm.c
++F:	security/bpf/
++
+ BROADCOM B44 10/100 ETHERNET DRIVER
+ M:	Michael Chan <michael.chan@broadcom.com>
+ L:	netdev@vger.kernel.org
+-- 
+2.29.2.454.gaff20da3a2-goog
+

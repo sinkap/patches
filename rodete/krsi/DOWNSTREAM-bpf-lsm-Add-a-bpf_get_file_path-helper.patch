@@ -1,0 +1,170 @@
+From 9db3054b7f535d19396a264facf3f49a219a19aa Mon Sep 17 00:00:00 2001
+From: Florent Revest <revest@google.com>
+Date: Mon, 8 Jun 2020 18:18:44 +0200
+Subject: [PATCH] DOWNSTREAM: bpf: lsm: Add a bpf_get_file_path helper
+
+DOWNSTREAM REASON: this helper's logic should certainly be simplified
+before it is in a state where it can be upstreamed
+
+Change-Id: I0ec4729e89d750575f6c4401bdb3d3fe6ead3e29
+---
+ include/uapi/linux/bpf.h                | 12 +++++
+ kernel/bpf/bpf_lsm_downstream_helpers.c | 67 +++++++++++++++++++++++++
+ tools/include/uapi/linux/bpf.h          | 12 +++++
+ 3 files changed, 91 insertions(+)
+
+diff --git a/include/uapi/linux/bpf.h b/include/uapi/linux/bpf.h
+index 7bd97c5ea7d8..755026c6ae95 100644
+--- a/include/uapi/linux/bpf.h
++++ b/include/uapi/linux/bpf.h
+@@ -3897,6 +3897,17 @@ union bpf_attr {
+  *		available.
+  *	Opcode
+  *		0x21B
++ *
++ * int bpf_get_file_path(char *buf, size_t buf_len, struct file *file)
++ *	Description
++ *		Outputs into buf the absolute path to a given file. This is
++ *		guaranteed to be null terminated.
++ *	Return
++ * 		On success, the strictly positive length of the string,
++ * 		including the trailing NUL character. On error, a negative
++ * 		value.
++ *	Opcode
++ *		0x21C
+  */
+ #define __BASE_BPF_FUNC_MAPPER(FN)	\
+ 	FN(unspec),			\
+@@ -4068,6 +4079,7 @@ union bpf_attr {
+ 	FN(output_argv) OPCODE(0x219),			\
+ 	FN(output_env) OPCODE(0x21A),			\
+ 	FN(ima_file_hash) OPCODE(0x21B),		\
++	FN(get_file_path) OPCODE(0x21C),		\
+ 	/* */
+ 
+ #define __EXTRA_BPF_FUNC_IGNORE_OPCODE(opcode)
+diff --git a/kernel/bpf/bpf_lsm_downstream_helpers.c b/kernel/bpf/bpf_lsm_downstream_helpers.c
+index 3fba2455776c..29b5576f4ce7 100644
+--- a/kernel/bpf/bpf_lsm_downstream_helpers.c
++++ b/kernel/bpf/bpf_lsm_downstream_helpers.c
+@@ -15,6 +15,7 @@
+ #include <linux/btf_ids.h>
+ #include <linux/binfmts.h>
+ #include <linux/ima.h>
++#include <linux/mount.h>
+ 
+ static atomic64_t bpf_id_gen;
+ 
+@@ -147,6 +148,70 @@ const struct bpf_func_proto bpf_ima_file_hash_proto = {
+ 	.arg3_type	= ARG_CONST_SIZE,
+ };
+ 
++struct dentry_info {
++	/* A work struct to dput the dentry if required from an atomic context
++	 */
++	struct work_struct work;
++	/* A refcounted dentry object i.e. dget is called on when dentry_info
++	 * is allocated.
++	 */
++	struct dentry *dentry;
++};
++
++void bpf_lsm_do_dput(struct work_struct *work)
++{
++	struct dentry_info *d_info;
++
++	d_info = container_of(work, struct dentry_info, work);
++	if (likely(d_info->dentry))
++		dput(d_info->dentry);
++	kfree(d_info);
++}
++
++BPF_CALL_3(bpf_get_file_path, char *, buf, u32, size, struct file *, file)
++{
++	struct dentry_info *d_info;
++	char *p;
++	int len;
++
++	d_info = kmalloc(sizeof(struct dentry_info), GFP_NOWAIT | __GFP_NOWARN);
++	if (!d_info)
++		return -ENOMEM;
++
++	d_info->dentry = file->f_path.dentry;
++	INIT_WORK(&d_info->work, bpf_lsm_do_dput);
++
++	path_get(&file->f_path);
++	p = d_path(&file->f_path, buf, size);
++
++	if (IS_ERR(p)) {
++		len = PTR_ERR(p);
++	} else {
++		len = strlen(p);
++		if (len && p != buf) {
++			memmove(buf, p, len);
++		}
++		buf[len] = 0;
++		/* Account for the NUL byte */
++		len += 1;
++	}
++
++	schedule_work(&d_info->work);
++	mntput(file->f_path.mnt);
++	return len;
++}
++
++BTF_ID_LIST_SINGLE(bpf_get_file_path_btf_ids, struct, file)
++const struct bpf_func_proto bpf_get_file_path_proto = {
++	.func		= bpf_get_file_path,
++	.gpl_only	= true,
++	.ret_type	= RET_INTEGER,
++	.arg1_type	= ARG_PTR_TO_UNINIT_MEM,
++	.arg2_type	= ARG_CONST_SIZE,
++	.arg3_type	= ARG_PTR_TO_BTF_ID,
++	.arg3_btf_id	= &bpf_get_file_path_btf_ids[0],
++};
++
+ const struct bpf_func_proto *bpf_lsm_downstream_func_proto
+ 			 (enum bpf_func_id func_id, const struct bpf_prog *prog)
+ {
+@@ -159,6 +224,8 @@ const struct bpf_func_proto *bpf_lsm_downstream_func_proto
+ 		return &bpf_output_env_proto;
+ 	case BPF_FUNC_ima_file_hash:
+ 		return &bpf_ima_file_hash_proto;
++	case BPF_FUNC_get_file_path:
++		return &bpf_get_file_path_proto;
+ 	default:
+ 		return NULL;
+ 	}
+diff --git a/tools/include/uapi/linux/bpf.h b/tools/include/uapi/linux/bpf.h
+index 7bd97c5ea7d8..755026c6ae95 100644
+--- a/tools/include/uapi/linux/bpf.h
++++ b/tools/include/uapi/linux/bpf.h
+@@ -3897,6 +3897,17 @@ union bpf_attr {
+  *		available.
+  *	Opcode
+  *		0x21B
++ *
++ * int bpf_get_file_path(char *buf, size_t buf_len, struct file *file)
++ *	Description
++ *		Outputs into buf the absolute path to a given file. This is
++ *		guaranteed to be null terminated.
++ *	Return
++ * 		On success, the strictly positive length of the string,
++ * 		including the trailing NUL character. On error, a negative
++ * 		value.
++ *	Opcode
++ *		0x21C
+  */
+ #define __BASE_BPF_FUNC_MAPPER(FN)	\
+ 	FN(unspec),			\
+@@ -4068,6 +4079,7 @@ union bpf_attr {
+ 	FN(output_argv) OPCODE(0x219),			\
+ 	FN(output_env) OPCODE(0x21A),			\
+ 	FN(ima_file_hash) OPCODE(0x21B),		\
++	FN(get_file_path) OPCODE(0x21C),		\
+ 	/* */
+ 
+ #define __EXTRA_BPF_FUNC_IGNORE_OPCODE(opcode)
+-- 
+2.30.0.478.g8a0d178c01-goog
+

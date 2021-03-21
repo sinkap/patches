@@ -1,0 +1,109 @@
+From af08950caa342369abbfaff792f298ff594cc856 Mon Sep 17 00:00:00 2001
+From: Florent Revest <revest@google.com>
+Date: Thu, 11 Jun 2020 18:21:28 +0200
+Subject: [PATCH] DOWNSTREAM: bpf: lsm: Add a bpf_gen_id helper
+
+The bpf_gen_id helper can be used to generate a unique u64 value. It is
+currently implemented with an atomic counter global to all eBPF
+programs. Each call to the helper returns a unique identified that can
+be used, for example, to uniquely identify a message on a ring buffer.
+
+DOWNSTREAM REASON: Alexei wants us to implement atomic add+read in eBPF
+instead.
+
+Change-Id: I945f6c3b233e3427128fd7095e934e6dc67ab4e9
+---
+ include/uapi/linux/bpf.h                | 10 ++++++++++
+ kernel/bpf/bpf_lsm_downstream_helpers.c | 15 +++++++++++++++
+ tools/include/uapi/linux/bpf.h          | 10 ++++++++++
+ 3 files changed, 35 insertions(+)
+
+diff --git a/include/uapi/linux/bpf.h b/include/uapi/linux/bpf.h
+index 513ed852ae28..fe8b4c91641f 100644
+--- a/include/uapi/linux/bpf.h
++++ b/include/uapi/linux/bpf.h
+@@ -3817,6 +3817,15 @@ union bpf_attr {
+  *		The **hash_algo** is returned on success,
+  *		**-EOPNOTSUP** if IMA is disabled or **-EINVAL** if
+  *		invalid arguments are passed.
++ *
++ * u64 bpf_gen_id(void)
++ *	Description
++ *		This helper can be used by any eBPF program to generate a unique
++ *		u64 value. This can be used as a unique identifier for anything.
++ *	Return
++ *		A unique u64 value.
++ *	Opcode
++ *		0x218
+  */
+ #define __BASE_BPF_FUNC_MAPPER(FN)	\
+ 	FN(unspec),			\
+@@ -3984,6 +3993,7 @@ union bpf_attr {
+ 	/* */
+ 
+ #define __EXTRA_BPF_FUNC_MAPPER(FN, OPCODE)		\
++	FN(gen_id) OPCODE(0x218),			\
+ 	/* */
+ 
+ #define __EXTRA_BPF_FUNC_IGNORE_OPCODE(opcode)
+diff --git a/kernel/bpf/bpf_lsm_downstream_helpers.c b/kernel/bpf/bpf_lsm_downstream_helpers.c
+index 8f6e05558a1f..fff20fc61819 100644
+--- a/kernel/bpf/bpf_lsm_downstream_helpers.c
++++ b/kernel/bpf/bpf_lsm_downstream_helpers.c
+@@ -14,10 +14,25 @@
+ #include <linux/types.h>
+ #include <linux/btf_ids.h>
+ 
++static atomic64_t bpf_id_gen;
++
++BPF_CALL_0(bpf_gen_id)
++{
++	return atomic64_inc_return(&bpf_id_gen);
++}
++
++const struct bpf_func_proto bpf_gen_id_proto = {
++	.func		= bpf_gen_id,
++	.gpl_only	= true,
++	.ret_type	= RET_INTEGER,
++};
++
+ const struct bpf_func_proto *bpf_lsm_downstream_func_proto
+ 			 (enum bpf_func_id func_id, const struct bpf_prog *prog)
+ {
+ 	switch (func_id) {
++	case BPF_FUNC_gen_id:
++		return &bpf_gen_id_proto;
+ 	default:
+ 		return NULL;
+ 	}
+diff --git a/tools/include/uapi/linux/bpf.h b/tools/include/uapi/linux/bpf.h
+index 513ed852ae28..fe8b4c91641f 100644
+--- a/tools/include/uapi/linux/bpf.h
++++ b/tools/include/uapi/linux/bpf.h
+@@ -3817,6 +3817,15 @@ union bpf_attr {
+  *		The **hash_algo** is returned on success,
+  *		**-EOPNOTSUP** if IMA is disabled or **-EINVAL** if
+  *		invalid arguments are passed.
++ *
++ * u64 bpf_gen_id(void)
++ *	Description
++ *		This helper can be used by any eBPF program to generate a unique
++ *		u64 value. This can be used as a unique identifier for anything.
++ *	Return
++ *		A unique u64 value.
++ *	Opcode
++ *		0x218
+  */
+ #define __BASE_BPF_FUNC_MAPPER(FN)	\
+ 	FN(unspec),			\
+@@ -3984,6 +3993,7 @@ union bpf_attr {
+ 	/* */
+ 
+ #define __EXTRA_BPF_FUNC_MAPPER(FN, OPCODE)		\
++	FN(gen_id) OPCODE(0x218),			\
+ 	/* */
+ 
+ #define __EXTRA_BPF_FUNC_IGNORE_OPCODE(opcode)
+-- 
+2.30.0.478.g8a0d178c01-goog
+

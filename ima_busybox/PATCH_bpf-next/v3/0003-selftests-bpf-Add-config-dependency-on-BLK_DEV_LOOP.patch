@@ -1,0 +1,29 @@
+From b2e45f1c5000a77cdb61b8ada99f86f209848695 Mon Sep 17 00:00:00 2001
+From: KP Singh <kpsingh@google.com>
+Date: Wed, 2 Dec 2020 22:29:29 +0000
+Subject: [PATCH bpf-next v3 3/4] selftests/bpf: Add config dependency on
+ BLK_DEV_LOOP
+
+The ima selftest restricts its scope to a test filesystem image
+mounted on a loop device and prevents permanent ima policy changes for
+the whole system.
+
+Fixes: 34b82d3ac105 ("bpf: Add a selftest for bpf_ima_inode_hash")
+Reported-by: Andrii Nakryiko <andrii@kernel.org>
+Signed-off-by: KP Singh <kpsingh@google.com>
+---
+ tools/testing/selftests/bpf/config | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/tools/testing/selftests/bpf/config b/tools/testing/selftests/bpf/config
+index 365bf9771b07..37e1f303fc11 100644
+--- a/tools/testing/selftests/bpf/config
++++ b/tools/testing/selftests/bpf/config
+@@ -43,3 +43,4 @@ CONFIG_IMA=y
+ CONFIG_SECURITYFS=y
+ CONFIG_IMA_WRITE_POLICY=y
+ CONFIG_IMA_READ_POLICY=y
++CONFIG_BLK_DEV_LOOP=y
+-- 
+2.29.2.576.ga3fc446d84-goog
+

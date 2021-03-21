@@ -1,0 +1,43 @@
+From 5427e18c47409e9aec28a0c6787e9826bf4edfcc Mon Sep 17 00:00:00 2001
+From: KP Singh <kpsingh@kernel.org>
+Date: Thu, 4 Feb 2021 19:36:21 +0000
+Subject: [PATCH] UPSTREAM: bpf: Allow usage of BPF ringbuffer in sleepable
+ programs
+
+The BPF ringbuffer map is pre-allocated and the implementation logic
+does not rely on disabling preemption or per-cpu data structures. Using
+the BPF ringbuffer sleepable LSM and tracing programs does not trigger
+any warnings with DEBUG_ATOMIC_SLEEP, DEBUG_PREEMPT,
+PROVE_RCU and PROVE_LOCKING and LOCKDEP enabled.
+
+This allows helpers like bpf_copy_from_user and bpf_ima_inode_hash to
+write to the BPF ring buffer from sleepable BPF programs.
+
+Signed-off-by: KP Singh <kpsingh@kernel.org>
+Signed-off-by: Andrii Nakryiko <andrii@kernel.org>
+Acked-by: Andrii Nakryiko <andrii@kernel.org>
+Link: https://lore.kernel.org/bpf/20210204193622.3367275-2-kpsingh@kernel.org
+---
+ kernel/bpf/verifier.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/kernel/bpf/verifier.c b/kernel/bpf/verifier.c
+index 2e095e8523d8..cc3c9438dbf6 100644
+--- a/kernel/bpf/verifier.c
++++ b/kernel/bpf/verifier.c
+@@ -9783,9 +9783,11 @@ static int check_map_prog_compatibility(struct bpf_verifier_env *env,
+ 				return -EINVAL;
+ 			}
+ 			break;
++		case BPF_MAP_TYPE_RINGBUF:
++			break;
+ 		default:
+ 			verbose(env,
+-				"Sleepable programs can only use array and hash maps\n");
++				"Sleepable programs can only use array, hash, and ringbuf maps\n");
+ 			return -EINVAL;
+ 		}
+ 
+-- 
+2.30.0.478.g8a0d178c01-goog
+

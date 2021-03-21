@@ -1,0 +1,169 @@
+From 856ea5416a30fc0d5bddc8467834ccdb0a407ecb Mon Sep 17 00:00:00 2001
+From: Florent Revest <revest@google.com>
+Date: Mon, 8 Jun 2020 18:42:37 +0200
+Subject: [PATCH] DOWNSTREAM: bpf: lsm: Add a bpf_get_handle helper
+
+DOWNSTREAM REASON: This is way too specific to HELM's needs to be sent
+upstream. However, it also contains code that can't be replicated with
+BPF as of now (eg: spinlocking on the inode lock and sock_from_file
+calls)
+
+Change-Id: Ie3adf4d2133fbad90564577ce56e8c95e76d577d
+---
+ include/uapi/linux/bpf.h                | 10 ++++
+ kernel/bpf/bpf_lsm_downstream_helpers.c | 68 +++++++++++++++++++++++++
+ tools/include/uapi/linux/bpf.h          | 10 ++++
+ 3 files changed, 88 insertions(+)
+
+diff --git a/include/uapi/linux/bpf.h b/include/uapi/linux/bpf.h
+index 43834cfd33e6..2c6d900920f7 100644
+--- a/include/uapi/linux/bpf.h
++++ b/include/uapi/linux/bpf.h
+@@ -3919,6 +3919,15 @@ union bpf_attr {
+  * 		value.
+  *	Opcode
+  *		0x21D
++ *
++ * int bpf_get_handle(struct krsi_fd *dst_fd, u32 dst_fd_len, int fd)
++ *	Description
++ *		Fills the 'dst_fd' structure with information relevant to the
++ *		file descriptor given in 'fd' for the current process.
++ *	Return
++ *		0 on success, or a negative error in case of failure.
++ *	Opcode
++ *		0x21E
+  */
+ #define __BASE_BPF_FUNC_MAPPER(FN)	\
+ 	FN(unspec),			\
+@@ -4092,6 +4101,7 @@ union bpf_attr {
+ 	FN(ima_file_hash) OPCODE(0x21B),		\
+ 	FN(get_file_path) OPCODE(0x21C),		\
+ 	FN(get_cwd) OPCODE(0x21D),			\
++	FN(get_handle) OPCODE(0x21E),			\
+ 	/* */
+ 
+ #define __EXTRA_BPF_FUNC_IGNORE_OPCODE(opcode)
+diff --git a/kernel/bpf/bpf_lsm_downstream_helpers.c b/kernel/bpf/bpf_lsm_downstream_helpers.c
+index c01de206d8bb..112e67785309 100644
+--- a/kernel/bpf/bpf_lsm_downstream_helpers.c
++++ b/kernel/bpf/bpf_lsm_downstream_helpers.c
+@@ -17,6 +17,7 @@
+ #include <linux/ima.h>
+ #include <linux/mount.h>
+ #include <linux/fs_struct.h>
++#include <linux/fdtable.h>
+ 
+ static atomic64_t bpf_id_gen;
+ 
+@@ -251,6 +252,71 @@ const struct bpf_func_proto bpf_get_cwd_proto = {
+ 	.arg2_type	= ARG_CONST_SIZE,
+ };
+ 
++// A simplified type of a file-like object.
++enum krsi_helm_file_type {
++	KRSI_HELM_FILE_NULL = 0,
++	KRSI_HELM_FILE_PIPE = 1,
++	KRSI_HELM_FILE_REGULAR = 2,
++	KRSI_HELM_FILE_PTY = 3,
++	KRSI_HELM_FILE_SOCKET = 4,
++	KRSI_HELM_FILE_OTHER = 99,
++};
++
++// A simplified file descriptor.
++struct krsi_helm_fd {
++	enum krsi_helm_file_type file_type;
++	// Opaque identifier for the file this FD is pointing at. This could be
++	// an inode number, a pipe pointer or something else. The user should
++	// not read too much into this value, only using it for comparisons with
++	// other file_ids of the same file_type.
++	uint64_t file_id;
++};
++
++BPF_CALL_3(bpf_get_handle, struct krsi_helm_fd *, dst_fd, u32, dst_fd_len,
++			   int, fd)
++{
++	int socket_error = 0;
++	struct file *fp = fcheck(fd);
++
++	if (unlikely(dst_fd_len < sizeof(*dst_fd)))
++		return -EINVAL;
++
++	// Clear the output.
++	dst_fd->file_type = KRSI_HELM_FILE_NULL;
++	dst_fd->file_id = 0;
++
++	if (fp && fp->f_inode) {
++		spin_lock(&fp->f_inode->i_lock);
++		switch (fp->f_inode->i_sb->s_magic) {
++		case PIPEFS_MAGIC:
++			dst_fd->file_type = KRSI_HELM_FILE_PIPE;
++			dst_fd->file_id = (uint64_t)fp->f_inode->i_pipe;
++			break;
++		case DEVPTS_SUPER_MAGIC:
++			dst_fd->file_type = KRSI_HELM_FILE_PTY;
++			dst_fd->file_id = (uint64_t)MINOR(fp->f_inode->i_rdev);
++			break;
++		case SOCKFS_MAGIC:
++			dst_fd->file_type = KRSI_HELM_FILE_SOCKET;
++			dst_fd->file_id =
++				(uint64_t)(sock_from_file(fp, &socket_error));
++			break;
++		}
++		spin_unlock(&fp->f_inode->i_lock);
++	}
++
++	return 0;
++}
++
++const struct bpf_func_proto bpf_get_handle_proto = {
++	.func = bpf_get_handle,
++	.gpl_only = true,
++	.ret_type = RET_INTEGER,
++	.arg1_type = ARG_PTR_TO_MEM,
++	.arg2_type = ARG_CONST_SIZE,
++	.arg3_type = ARG_ANYTHING,
++};
++
+ const struct bpf_func_proto *bpf_lsm_downstream_func_proto
+ 			 (enum bpf_func_id func_id, const struct bpf_prog *prog)
+ {
+@@ -267,6 +333,8 @@ const struct bpf_func_proto *bpf_lsm_downstream_func_proto
+ 		return &bpf_get_file_path_proto;
+ 	case BPF_FUNC_get_cwd:
+ 		return &bpf_get_cwd_proto;
++	case BPF_FUNC_get_handle:
++		return &bpf_get_handle_proto;
+ 	default:
+ 		return NULL;
+ 	}
+diff --git a/tools/include/uapi/linux/bpf.h b/tools/include/uapi/linux/bpf.h
+index 43834cfd33e6..2c6d900920f7 100644
+--- a/tools/include/uapi/linux/bpf.h
++++ b/tools/include/uapi/linux/bpf.h
+@@ -3919,6 +3919,15 @@ union bpf_attr {
+  * 		value.
+  *	Opcode
+  *		0x21D
++ *
++ * int bpf_get_handle(struct krsi_fd *dst_fd, u32 dst_fd_len, int fd)
++ *	Description
++ *		Fills the 'dst_fd' structure with information relevant to the
++ *		file descriptor given in 'fd' for the current process.
++ *	Return
++ *		0 on success, or a negative error in case of failure.
++ *	Opcode
++ *		0x21E
+  */
+ #define __BASE_BPF_FUNC_MAPPER(FN)	\
+ 	FN(unspec),			\
+@@ -4092,6 +4101,7 @@ union bpf_attr {
+ 	FN(ima_file_hash) OPCODE(0x21B),		\
+ 	FN(get_file_path) OPCODE(0x21C),		\
+ 	FN(get_cwd) OPCODE(0x21D),			\
++	FN(get_handle) OPCODE(0x21E),			\
+ 	/* */
+ 
+ #define __EXTRA_BPF_FUNC_IGNORE_OPCODE(opcode)
+-- 
+2.30.0.478.g8a0d178c01-goog
+

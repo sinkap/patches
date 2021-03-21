@@ -1,0 +1,43 @@
+From 7d238bc7649f35631ab6edf01d38cf4cec4dd402 Mon Sep 17 00:00:00 2001
+From: KP Singh <kpsingh@google.com>
+Date: Thu, 3 Dec 2020 17:23:29 +0000
+Subject: [PATCH bpf-next v4 0/4] Fixes for ima selftest
+
+# v3 -> v4
+
+* Fix typos.
+* Update commit message for the indentation patch.
+* Added Andrii's acks.
+
+# v2 -> v3
+
+* Added missing tags.
+* Indentation fixes + some other fixes suggested by Andrii.
+* Re-indent file to tabs.
+
+The selftest for the bpf_ima_inode_hash helper uses a shell script to
+setup the system for ima. While this worked without an issue on recent
+desktop distros, it failed on environments with stripped out shells like
+busybox which is also used by the bpf CI.
+
+This series fixes the assumptions made on the availablity of certain
+command line switches and the expectation that securityfs being mounted
+by default.
+
+It also adds the missing kernel config dependencies in
+tools/testing/selftests/bpf and, lastly, changes the indentation of
+ima_setup.sh to use tabs.
+
+KP Singh (4):
+  selftests/bpf: Update ima_setup.sh for busybox
+  selftests/bpf: Ensure securityfs mount before writing ima policy
+  selftests/bpf: Add config dependency on BLK_DEV_LOOP
+  selftests/bpf: Indent ima_setup.sh with tabs.
+
+ tools/testing/selftests/bpf/config       |   1 +
+ tools/testing/selftests/bpf/ima_setup.sh | 107 +++++++++++++----------
+ 2 files changed, 64 insertions(+), 44 deletions(-)
+
+-- 
+2.29.2.576.ga3fc446d84-goog
+

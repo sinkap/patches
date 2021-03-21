@@ -1,0 +1,46 @@
+From 9f5a458203d2bbd80a2deb390909a50a7b4283bb Mon Sep 17 00:00:00 2001
+From: KP Singh <kpsingh@google.com>
+Date: Mon, 30 Nov 2020 19:45:15 +0000
+Subject: [PATCH][G/H] UBUNTU: [Config] Enable CONFIG_BPF_LSM
+
+Buglink: https://bugs.launchpad.net/bugs/1905975
+
+[Impact]
+
+Allows users to implement MAC and Audit Policies using BPF programs.
+
+The LSM won't be added to the list of active LSMs by default (in
+CONFIG_LSM or lsm= on the boot parameters) yet, as it adds an indirect
+function call overhead by registering an empty callback for all hooks.
+
+The LSM can be made "active" by default when the upstream effort [1] of
+getting rid of this overhead is merged in the mainline kernel.
+
+[Regression Potential]
+
+Since the LSM is not active by default, it does not cause any
+functional or performance regression.
+
+[1]: https://lore.kernel.org/bpf/20200820164753.3256899-1-jackmanb@chromium.org
+
+Signed-off-by: KP Singh <kpsingh@google.com>
+---
+ debian.master/config/config.common.ubuntu | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/debian.master/config/config.common.ubuntu b/debian.master/config/config.common.ubuntu
+index c20145760f29..39f5fffcc641 100644
+--- a/debian.master/config/config.common.ubuntu
++++ b/debian.master/config/config.common.ubuntu
+@@ -1216,7 +1216,7 @@ CONFIG_BPF_JIT=y
+ CONFIG_BPF_JIT_ALWAYS_ON=y
+ CONFIG_BPF_JIT_DEFAULT_ON=y
+ CONFIG_BPF_KPROBE_OVERRIDE=y
+-# CONFIG_BPF_LSM is not set
++CONFIG_BPF_LSM=y
+ CONFIG_BPF_STREAM_PARSER=y
+ CONFIG_BPF_SYSCALL=y
+ CONFIG_BPQETHER=m
+-- 
+2.29.2.454.gaff20da3a2-goog
+

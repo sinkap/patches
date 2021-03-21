@@ -1,4 +1,4 @@
-From e6e6c54adbab1103f71bf1ec7842d41b02ba9430 Mon Sep 17 00:00:00 2001
+From 9605ebf794064999f768ed534f686e26d6f8fc81 Mon Sep 17 00:00:00 2001
 From: KP Singh <kpsingh@google.com>
 Date: Tue, 24 Nov 2020 01:30:20 +0000
 Subject: [PATCH bpf-next v3 3/3] bpf: Add a selftest for bpf_ima_inode_hash
@@ -22,10 +22,10 @@ IMA_{WRITE,READ}_POLICY) for running this test are also updated.
 Signed-off-by: KP Singh <kpsingh@google.com>
 ---
  tools/testing/selftests/bpf/config            |  4 +
- tools/testing/selftests/bpf/ima_setup.sh      | 79 +++++++++++++++++++
+ tools/testing/selftests/bpf/ima_setup.sh      | 80 +++++++++++++++++++
  .../selftests/bpf/prog_tests/test_ima.c       | 74 +++++++++++++++++
  tools/testing/selftests/bpf/progs/ima.c       | 28 +++++++
- 4 files changed, 185 insertions(+)
+ 4 files changed, 186 insertions(+)
  create mode 100644 tools/testing/selftests/bpf/ima_setup.sh
  create mode 100644 tools/testing/selftests/bpf/prog_tests/test_ima.c
  create mode 100644 tools/testing/selftests/bpf/progs/ima.c
@@ -44,14 +44,15 @@ index 2118e23ac07a..365bf9771b07 100644
 +CONFIG_IMA_READ_POLICY=y
 diff --git a/tools/testing/selftests/bpf/ima_setup.sh b/tools/testing/selftests/bpf/ima_setup.sh
 new file mode 100644
-index 000000000000..3d2d41644c82
+index 000000000000..15490ccc5e55
 --- /dev/null
 +++ b/tools/testing/selftests/bpf/ima_setup.sh
-@@ -0,0 +1,79 @@
+@@ -0,0 +1,80 @@
 +#!/bin/bash
 +# SPDX-License-Identifier: GPL-2.0
 +
 +set -e
++set -u
 +
 +IMA_POLICY_FILE="/sys/kernel/security/ima/policy"
 +TEST_BINARY="/bin/true"
@@ -65,8 +66,8 @@ index 000000000000..3d2d41644c82
 +setup()
 +{
 +        local tmp_dir="$1"
-+        local mount_img="${tmp_dir:?}/test.img"
-+        local mount_dir="${tmp_dir:?}/mnt"
++        local mount_img="${tmp_dir}/test.img"
++        local mount_dir="${tmp_dir}/mnt"
 +        local copied_bin_path="${mount_dir}/$(basename ${TEST_BINARY})"
 +        mkdir -p ${mount_dir}
 +
@@ -74,18 +75,18 @@ index 000000000000..3d2d41644c82
 +
 +        local loop_device="$(losetup --find --show ${mount_img})"
 +
-+        mkfs.ext4 "${loop_device:?}"
-+        mount "${loop_device:?}" "${mount_dir}"
++        mkfs.ext4 "${loop_device}"
++        mount "${loop_device}" "${mount_dir}"
 +
 +        cp "${TEST_BINARY}" "${mount_dir}"
-+        local mount_uuid="$(blkid -s UUID -o value ${loop_device:?})"
-+        echo "measure func=BPRM_CHECK fsuuid=${mount_uuid:?}" > ${IMA_POLICY_FILE}
++        local mount_uuid="$(blkid -s UUID -o value ${loop_device})"
++        echo "measure func=BPRM_CHECK fsuuid=${mount_uuid}" > ${IMA_POLICY_FILE}
 +}
 +
 +cleanup() {
 +        local tmp_dir="$1"
-+        local mount_img="${tmp_dir:?}/test.img"
-+        local mount_dir="${tmp_dir:?}/mnt"
++        local mount_img="${tmp_dir}/test.img"
++        local mount_dir="${tmp_dir}/mnt"
 +
 +        local loop_devices=$(losetup -j ${mount_img} -O NAME --noheadings)
 +        for loop_dev in "${loop_devices}"; do
@@ -93,13 +94,13 @@ index 000000000000..3d2d41644c82
 +        done
 +
 +        umount ${mount_dir}
-+        rm -rf ${tmp_dir:?}
++        rm -rf ${tmp_dir}
 +}
 +
 +run()
 +{
 +        local tmp_dir="$1"
-+        local mount_dir="${tmp_dir:?}/mnt"
++        local mount_dir="${tmp_dir}/mnt"
 +        local copied_bin_path="${mount_dir}/$(basename ${TEST_BINARY})"
 +
 +        exec "${copied_bin_path}"
@@ -112,14 +113,14 @@ index 000000000000..3d2d41644c82
 +        local action="$1"
 +        local tmp_dir="$2"
 +
-+        [[ ! -d "${tmp_dir:?}" ]] && echo "Directory ${tmp_dir} doesn't exist" && exit 1
++        [[ ! -d "${tmp_dir}" ]] && echo "Directory ${tmp_dir} doesn't exist" && exit 1
 +
 +        if [[ "${action}" == "setup" ]]; then
-+                setup "${tmp_dir:?}"
++                setup "${tmp_dir}"
 +        elif [[ "${action}" == "cleanup" ]]; then
-+                cleanup "${tmp_dir:?}"
++                cleanup "${tmp_dir}"
 +        elif [[ "${action}" == "run" ]]; then
-+                run "${tmp_dir:?}"
++                run "${tmp_dir}"
 +        else
 +                echo "Unknown action: ${action}"
 +                exit 1

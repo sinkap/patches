@@ -1,0 +1,213 @@
+From 88d63b18b1ae6dbfcb57676d5e8950a41a1c667c Mon Sep 17 00:00:00 2001
+From: Florent Revest <revest@google.com>
+Date: Fri, 5 Jun 2020 14:40:03 +0200
+Subject: [PATCH] DOWNSTREAM: bpf: lsm: Add a bpf_output_argv helper
+
+DOWNSTREAM REASON: This feature is too specific and can't be implemented
+with other helpers yet.
+
+Change-Id: Ia2c2d90fefc4c89866f32d9abb14b77541ad8bdf
+---
+ include/uapi/linux/bpf.h                | 26 +++++++++++++
+ kernel/bpf/bpf_lsm_downstream_helpers.c | 49 +++++++++++++++++++++++++
+ kernel/bpf/verifier.c                   |  1 +
+ scripts/bpf_helpers_doc.py              |  2 +
+ tools/include/uapi/linux/bpf.h          | 26 +++++++++++++
+ 5 files changed, 104 insertions(+)
+
+diff --git a/include/uapi/linux/bpf.h b/include/uapi/linux/bpf.h
+index fe8b4c91641f..15c61e4c1080 100644
+--- a/include/uapi/linux/bpf.h
++++ b/include/uapi/linux/bpf.h
+@@ -3826,6 +3826,31 @@ union bpf_attr {
+  *		A unique u64 value.
+  *	Opcode
+  *		0x218
++ *
++ * u64 bpf_output_argv(struct linux_binprm *bprm, void *map, u64 flags, void *meta, int meta_size)
++ *	Description
++ *		This outputs multiple chunks of data to the perf ring buffer,
++ *		one per arguments, and each of them containing the two
++ *		following buffers consecutively:
++ *		1- a buffer given by the caller in *meta* of size *meta_size*,
++ *		this can be used to identify the message.
++ *		2- One argument. It is guaranteed to be null terminated string.
++ *		Arguments arrive in order.
++ *
++ *		*map* should be of type **BPF_MAP_TYPE_PERF_EVENT_ARRAY**. The
++ *		event must have the following attributes: **PERF_SAMPLE_RAW**
++ *		as **sample_type**, **PERF_TYPE_SOFTWARE** as **type**, and
++ *		**PERF_COUNT_SW_BPF_OUTPUT** as **config**.
++ *
++ *		The *flags* are used to indicate the index in *map* for which
++ *		the value must be put, masked with **BPF_F_INDEX_MASK**.
++ *		Alternatively, *flags* can be set to **BPF_F_CURRENT_CPU**
++ *		to indicate that the index of the current CPU core should be
++ *		used.
++ *	Return
++ *		0 on success, or a negative error in case of failure.
++ *	Opcode
++ *		0x219
+  */
+ #define __BASE_BPF_FUNC_MAPPER(FN)	\
+ 	FN(unspec),			\
+@@ -3994,6 +4019,7 @@ union bpf_attr {
+ 
+ #define __EXTRA_BPF_FUNC_MAPPER(FN, OPCODE)		\
+ 	FN(gen_id) OPCODE(0x218),			\
++	FN(output_argv) OPCODE(0x219),			\
+ 	/* */
+ 
+ #define __EXTRA_BPF_FUNC_IGNORE_OPCODE(opcode)
+diff --git a/kernel/bpf/bpf_lsm_downstream_helpers.c b/kernel/bpf/bpf_lsm_downstream_helpers.c
+index fff20fc61819..1be6e7706a25 100644
+--- a/kernel/bpf/bpf_lsm_downstream_helpers.c
++++ b/kernel/bpf/bpf_lsm_downstream_helpers.c
+@@ -13,6 +13,7 @@
+ #include <linux/filter.h>
+ #include <linux/types.h>
+ #include <linux/btf_ids.h>
++#include <linux/binfmts.h>
+ 
+ static atomic64_t bpf_id_gen;
+ 
+@@ -27,12 +28,60 @@ const struct bpf_func_proto bpf_gen_id_proto = {
+ 	.ret_type	= RET_INTEGER,
+ };
+ 
++#define MAX_ARGV_STRLEN 0x1000
++BPF_CALL_5(bpf_output_argv, struct linux_binprm *, bprm,
++			    struct bpf_map *, map, u64, flags,
++			    void *, meta, u64, meta_size)
++{
++	unsigned long i;
++	int ret = 0;
++	char *arg_kern, *arg_user;
++
++	arg_kern = kmalloc(MAX_ARGV_STRLEN, GFP_NOWAIT | __GFP_NOWARN);
++	if (!arg_kern)
++		return -ENOMEM;
++
++	arg_user = (void *)bprm->p;
++
++	for (i = 0; i < bprm->argc; i++) {
++		long copied = strncpy_from_user_nofault(arg_kern, arg_user,
++							MAX_ARGV_STRLEN);
++		if (copied <= 0 || copied > MAX_ARGV_STRLEN - 1) {
++			ret = -EFAULT;
++			goto out;
++		}
++
++		ret |= bpf_event_output(map, flags, meta, meta_size,
++					arg_kern, copied, NULL);
++		arg_user += copied;
++	}
++
++out:
++	kfree(arg_kern);
++	return ret;
++}
++
++BTF_ID_LIST_SINGLE(bpf_output_argv_btf_ids, struct, linux_binprm)
++const struct bpf_func_proto bpf_output_argv_proto = {
++	.func		= bpf_output_argv,
++	.gpl_only	= true,
++	.ret_type	= RET_INTEGER,
++	.arg1_type	= ARG_PTR_TO_BTF_ID,
++	.arg1_btf_id	= &bpf_output_argv_btf_ids[0],
++	.arg2_type	= ARG_CONST_MAP_PTR,
++	.arg3_type	= ARG_ANYTHING,
++	.arg4_type	= ARG_PTR_TO_MEM,
++	.arg5_type	= ARG_CONST_SIZE_OR_ZERO,
++};
++
+ const struct bpf_func_proto *bpf_lsm_downstream_func_proto
+ 			 (enum bpf_func_id func_id, const struct bpf_prog *prog)
+ {
+ 	switch (func_id) {
+ 	case BPF_FUNC_gen_id:
+ 		return &bpf_gen_id_proto;
++	case BPF_FUNC_output_argv:
++		return &bpf_output_argv_proto;
+ 	default:
+ 		return NULL;
+ 	}
+diff --git a/kernel/bpf/verifier.c b/kernel/bpf/verifier.c
+index cc3c9438dbf6..7c537d64f9f9 100644
+--- a/kernel/bpf/verifier.c
++++ b/kernel/bpf/verifier.c
+@@ -4377,6 +4377,7 @@ static int check_map_func_compatibility(struct bpf_verifier_env *env,
+ 		if (func_id != BPF_FUNC_perf_event_read &&
+ 		    func_id != BPF_FUNC_perf_event_output &&
+ 		    func_id != BPF_FUNC_skb_output &&
++		    func_id != BPF_FUNC_output_argv &&
+ 		    func_id != BPF_FUNC_perf_event_read_value &&
+ 		    func_id != BPF_FUNC_xdp_output)
+ 			goto error;
+diff --git a/scripts/bpf_helpers_doc.py b/scripts/bpf_helpers_doc.py
+index 8b829748d488..8c0f752542f9 100755
+--- a/scripts/bpf_helpers_doc.py
++++ b/scripts/bpf_helpers_doc.py
+@@ -434,6 +434,7 @@ class PrinterHelpers(Printer):
+             'struct __sk_buff',
+             'struct sk_msg_md',
+             'struct xdp_md',
++            'struct linux_binprm',
+             'struct path',
+             'struct btf_ptr',
+             'struct inode',
+@@ -472,6 +473,7 @@ class PrinterHelpers(Printer):
+             'struct sk_reuseport_md',
+             'struct sockaddr',
+             'struct tcphdr',
++            'struct linux_binprm',
+             'struct seq_file',
+             'struct tcp6_sock',
+             'struct tcp_sock',
+diff --git a/tools/include/uapi/linux/bpf.h b/tools/include/uapi/linux/bpf.h
+index fe8b4c91641f..15c61e4c1080 100644
+--- a/tools/include/uapi/linux/bpf.h
++++ b/tools/include/uapi/linux/bpf.h
+@@ -3826,6 +3826,31 @@ union bpf_attr {
+  *		A unique u64 value.
+  *	Opcode
+  *		0x218
++ *
++ * u64 bpf_output_argv(struct linux_binprm *bprm, void *map, u64 flags, void *meta, int meta_size)
++ *	Description
++ *		This outputs multiple chunks of data to the perf ring buffer,
++ *		one per arguments, and each of them containing the two
++ *		following buffers consecutively:
++ *		1- a buffer given by the caller in *meta* of size *meta_size*,
++ *		this can be used to identify the message.
++ *		2- One argument. It is guaranteed to be null terminated string.
++ *		Arguments arrive in order.
++ *
++ *		*map* should be of type **BPF_MAP_TYPE_PERF_EVENT_ARRAY**. The
++ *		event must have the following attributes: **PERF_SAMPLE_RAW**
++ *		as **sample_type**, **PERF_TYPE_SOFTWARE** as **type**, and
++ *		**PERF_COUNT_SW_BPF_OUTPUT** as **config**.
++ *
++ *		The *flags* are used to indicate the index in *map* for which
++ *		the value must be put, masked with **BPF_F_INDEX_MASK**.
++ *		Alternatively, *flags* can be set to **BPF_F_CURRENT_CPU**
++ *		to indicate that the index of the current CPU core should be
++ *		used.
++ *	Return
++ *		0 on success, or a negative error in case of failure.
++ *	Opcode
++ *		0x219
+  */
+ #define __BASE_BPF_FUNC_MAPPER(FN)	\
+ 	FN(unspec),			\
+@@ -3994,6 +4019,7 @@ union bpf_attr {
+ 
+ #define __EXTRA_BPF_FUNC_MAPPER(FN, OPCODE)		\
+ 	FN(gen_id) OPCODE(0x218),			\
++	FN(output_argv) OPCODE(0x219),			\
+ 	/* */
+ 
+ #define __EXTRA_BPF_FUNC_IGNORE_OPCODE(opcode)
+-- 
+2.30.0.478.g8a0d178c01-goog
+

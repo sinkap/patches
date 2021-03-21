@@ -1,0 +1,50 @@
+From 069b6b9ae480628a0f7cfa004a98158570dcaa3c Mon Sep 17 00:00:00 2001
+From: KP Singh <kpsingh@google.com>
+Date: Wed, 2 Dec 2020 22:05:53 +0000
+Subject: [PATCH bpf-next v2 2/3] selftests/bpf: Ensure securityfs mount before
+ writing ima policy
+
+SecurityFS may not be mounted even if it is enabled in the kernel
+config.
+
+Signed-off-by: KP Singh <kpsingh@google.com>
+---
+ tools/testing/selftests/bpf/ima_setup.sh | 15 +++++++++++++++
+ 1 file changed, 15 insertions(+)
+
+diff --git a/tools/testing/selftests/bpf/ima_setup.sh b/tools/testing/selftests/bpf/ima_setup.sh
+index d864c62c1207..1da2d97a0e72 100755
+--- a/tools/testing/selftests/bpf/ima_setup.sh
++++ b/tools/testing/selftests/bpf/ima_setup.sh
+@@ -14,6 +14,20 @@ usage()
+         exit 1
+ }
+ 
++ensure_mount_securityfs()
++{
++        local securityfs_dir=$(grep "securityfs" /proc/mounts | awk '{print $2}')
++
++        if [ -z "${securityfs_dir}" ]; then
++		securityfs_dir=/sys/kernel/security
++		mount -t securityfs security "${securityfs_dir}"
++	fi
++
++	if [ ! -d "${securityfs_dir}" ]; then
++		echo "${securityfs_dir} :securityfs is not mounted" && exit 1
++	fi
++}
++
+ setup()
+ {
+         local tmp_dir="$1"
+@@ -33,6 +47,7 @@ setup()
+         cp "${TEST_BINARY}" "${mount_dir}"
+ 	local mount_uuid="$(blkid ${loop_device} | sed 's/.*UUID="\([^"]*\)".*/\1/')"
+ 
++        ensure_mount_securityfs
+         echo "measure func=BPRM_CHECK fsuuid=${mount_uuid}" > ${IMA_POLICY_FILE}
+ }
+ 
+-- 
+2.29.2.576.ga3fc446d84-goog
+
